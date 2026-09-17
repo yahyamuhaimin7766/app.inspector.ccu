@@ -1,5 +1,5 @@
-// GANTI URL INI DENGAN URL DEPLOYMENT GOOGLE APPS SCRIPT ANDA!
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxTyyjaf5nVVY0hpK5pjmh3jP6hlg0lzCGnszJjddvTQf3jdxLX08uxoLGYLxbZQTKc/exec";
+// GANTI URL INI DENGAN URL DEPLOYMENT BARU ANDA!
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxkLTkiFgoUSiAYY4r2z4uiZlKAGSpJAkAHBi26dZe7_gv3vw5wlcamuETmf2xG4uUd/exec";
 
 export const submitClaimData = async (data, action = "insert", id = null) => {
   try {
