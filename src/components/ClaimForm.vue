@@ -95,7 +95,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="space-y-1.5">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">KM / ODO</label>
-        <input type="number" v-model="form.km" placeholder="Contoh: 1500"
+        <input type="number" v-model="form.km" placeholder="Contoh: 86"
           class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs">
       </div>
       <div class="space-y-1.5">
