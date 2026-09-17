@@ -9,23 +9,18 @@ export const submitClaimData = async (data, action = "insert", id = null) => {
     });
     return await response.json();
   } catch (error) {
-    throw new Error("Koneksi ke server gagal.");
+    throw new Error("Koneksi ke server gagal");
   }
 };
 
 export const getClaimHistory = async () => {
   try {
-    // Trik anti-cache dan ikuti redirect dari Google
     const noCacheUrl = `${SCRIPT_URL}?t=${new Date().getTime()}`;
-    const response = await fetch(noCacheUrl, {
-      method: "GET",
-      redirect: "follow",
-    });
-
+    const response = await fetch(noCacheUrl, { method: "GET", redirect: "follow" });
     const result = await response.json();
     return result.data || [];
   } catch (error) {
-    console.error("Gagal mengambil riwayat dari Google Sheets: ", error);
+    console.error("Gagal mengambil riwayat: ", error);
     return [];
   }
 };
