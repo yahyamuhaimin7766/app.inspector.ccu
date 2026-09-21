@@ -1,6 +1,5 @@
 <template>
   <form @submit.prevent="handleSubmit" class="p-4 md:p-6 space-y-6 max-w-xl mx-auto pb-28">
-    <!-- Tanggal -->
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Tanggal *</label>
       <input type="date" v-model="form.tanggal" required class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs" />
@@ -24,13 +23,11 @@
         </button>
       </div>
 
-      <!-- Area Kamera Live + Frame Target OCR -->
       <div v-show="isScanning" class="bg-slate-900 rounded-2xl overflow-hidden p-2 border-2 border-blue-500 relative shadow-xl space-y-2 mt-2">
         <div class="relative w-full h-[300px] bg-black rounded-xl overflow-hidden flex items-center justify-center">
           <video ref="videoElement" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
 
           <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 bg-black/40">
-            <!-- KOTAK DIPERLEBAR JADI 18% AGAR TEKS WARNA DAN VIN BISA MASUK SEKALIGUS -->
             <div class="w-[90%] h-[18%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
               <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> POSISIKAN <span class="text-red-400">WARNA & VIN</span> DI DALAM KOTAK </span>
               <div class="w-full h-[1px] bg-red-500/50 absolute top-1/2"></div>
@@ -77,7 +74,7 @@
       </div>
     </div>
 
-    <!-- TIPE & VARIAN -->
+    <!-- Tipe Otomatis -->
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Tipe & Varian Kendaraan *</label>
       <div
@@ -88,7 +85,7 @@
           {{ form.tipe }}
         </span>
         <span v-else-if="form.tipe === 'Tipe Tidak Ditemukan'" class="text-red-500 italic font-bold"> ⚠ Tipe tidak ditemukan di Master NIK </span>
-        <span v-else class="text-slate-400 italic text-sm"> Terisi otomatis setelah scan/ketik VIN... </span>
+        <span v-else class="text-slate-400 italic text-sm"> Terisi otomatis... </span>
 
         <svg v-if="form.tipe && form.tipe !== 'Tipe Tidak Ditemukan'" class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
@@ -115,7 +112,6 @@
       </div>
     </div>
 
-    <!-- KM & Kode Accu -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="space-y-1.5">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">KM / ODO</label>
@@ -137,26 +133,6 @@
       </div>
     </div>
 
-    <!-- Stempel QC -->
-    <div class="space-y-1.5">
-      <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Stempel QC *</label>
-      <div class="grid grid-cols-4 gap-2">
-        <button
-          v-for="qc in options.qc"
-          :key="qc"
-          type="button"
-          @click="form.stempel_qc = qc"
-          :class="[
-            'py-3 text-xs font-bold rounded-xl border transition shadow-xs',
-            form.stempel_qc === qc ? 'bg-blue-600 border-blue-700 text-white shadow-md shadow-blue-500/25 scale-[1.02]' : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50',
-          ]"
-        >
-          {{ qc }}
-        </button>
-      </div>
-    </div>
-
-    <!-- Defect & Ket Defect -->
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Defect</label>
       <input
@@ -166,6 +142,7 @@
         class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs"
       />
     </div>
+
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Keterangan Defect</label>
       <textarea
@@ -190,12 +167,15 @@
 <script setup>
 import { reactive, ref, onBeforeUnmount, nextTick, watch } from "vue";
 
-const props = defineProps({ loading: Boolean, editData: Object });
+const props = defineProps({
+  loading: Boolean,
+  editData: Object,
+  qcId: String, // Menerima ID QC otomatis dari App.vue
+});
 const emit = defineEmits(["submit", "reset"]);
 
 const options = {
   warna: ["BLACK", "WHITE", "SILVER", "RED", "YELLOW", "GREY", "BRONZE", "ORANGE"],
-  qc: ["P-21", "P-18", "P-20", "P-17", "P-63", "P-62", "P-15", "P-54", "P-80", "P-70", "P-19", "P-52"],
 };
 
 const masterNik = {
@@ -318,7 +298,6 @@ const getInitialForm = () => ({
   warna: "",
   km: "",
   kode_accu: "",
-  stempel_qc: "",
   defect: "",
   ket_defect: "",
 });
@@ -339,7 +318,6 @@ watch(
       form.warna = newData["Warna"] || newData["warna"] || "";
       form.km = newData["KM"] || newData["km"] || "";
       form.kode_accu = newData["Kode Accu"] || newData["kode_accu"] || "";
-      form.stempel_qc = newData["Stempel QC"] || newData["stempel_qc"] || "";
       form.defect = newData["Defect"] || newData["defect"] || "";
       form.ket_defect = newData["Keterangan Defect"] || newData["ket_defect"] || "";
     } else {
@@ -400,7 +378,6 @@ const takeSnapshotAndRead = async () => {
     const vWidth = video.videoWidth;
     const vHeight = video.videoHeight;
     const cropWidth = vWidth * 0.9;
-    // Tinggi kotak diperbesar menjadi 18% untuk menampung baris warna & VIN
     const cropHeight = vHeight * 0.18;
     const startX = (vWidth - cropWidth) / 2;
     const startY = (vHeight - cropHeight) / 2;
@@ -411,7 +388,6 @@ const takeSnapshotAndRead = async () => {
     const ctx = canvas.getContext("2d");
 
     ctx.drawImage(video, startX, startY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
-
     const base64CroppedImage = canvas.toDataURL("image/jpeg", 1.0);
 
     const formData = new FormData();
@@ -430,9 +406,9 @@ const takeSnapshotAndRead = async () => {
     if (result && result.ParsedResults && result.ParsedResults.length > 0) {
       let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
 
-      // ==========================================
-      // 1. DETEKSI WARNA (Sebelum teks dibersihkan)
-      // ==========================================
+      // ========================================================
+      // 1. FILTER DAFTAR PUTIH WARNA (Blokir selain 8 warna ini)
+      // ========================================================
       let detectedColor = "";
       for (let w of options.warna) {
         if (rawText.includes(w)) {
@@ -441,7 +417,7 @@ const takeSnapshotAndRead = async () => {
         }
       }
 
-      // Fallback cerdas jika kamera buram menyebabkan Typo pada nama warna
+      // Jika warna tidak tertangkap karena typo (kamera buram), perbaiki!
       if (!detectedColor) {
         if (rawText.includes("WH1TE") || rawText.includes("WHTE")) detectedColor = "WHITE";
         if (rawText.includes("S1LVER") || rawText.includes("SLVER")) detectedColor = "SILVER";
@@ -449,25 +425,22 @@ const takeSnapshotAndRead = async () => {
         if (rawText.includes("6REY")) detectedColor = "GREY";
       }
 
-      // ==========================================
-      // 2. EKSTRAKSI & PENCARIAN VIN
-      // ==========================================
-      // Perbaikan Typo VIN pada huruf yang mirip angka
+      // ========================================================
+      // 2. FILTER DAFTAR PUTIH VIN (Blokir semua kecuali MHK/PM2)
+      // ========================================================
+      // Hapus Typo dulu sebelum dicari
       let cleanText = rawText.replace(/I/g, "1").replace(/O/g, "0").replace(/Q/g, "0");
-
-      // Buldoser pembersih simbol & spasi
+      // Sapu bersih spasi dan simbol, jadikan 1 teks panjang
       cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
 
+      // LOGIKA BLOKIR MUTLAK: Ekstrak HANYA yang 17 digit berawalan MHK atau PM2.
+      // Kata "VEHICLE" atau "ENGINE" akan sepenuhnya diabaikan dan terbuang otomatis.
       const vinRegex = /(MHK|PM2)[A-Z0-9]{14}/g;
       const foundVINs = cleanText.match(vinRegex);
 
       if (foundVINs) {
-        // Eksekusi pengisian form otomatis
         form.no_rangka = foundVINs[0];
-        if (detectedColor) {
-          form.warna = detectedColor;
-        }
-
+        if (detectedColor) form.warna = detectedColor;
         try {
           navigator.vibrate(200);
         } catch (e) {}
@@ -496,11 +469,9 @@ const handleSubmit = () => {
     alert("Pilih Warna!");
     return;
   }
-  if (!form.stempel_qc) {
-    alert("Pilih Stempel QC!");
-    return;
-  }
-  emit("submit", { ...form });
+
+  // Menggabungkan form data dengan ID QC pengguna dari sesi (dikirim dari App.vue)
+  emit("submit", { ...form, stempel_qc: props.qcId });
 };
 
 const handleReset = () => {
