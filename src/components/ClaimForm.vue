@@ -30,8 +30,9 @@
           <video ref="videoElement" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
 
           <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 bg-black/40">
-            <div class="w-[90%] h-[25%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
-              <span class="absolute -top-6 left-0 right-0 text-center text-[11px] text-white font-bold drop-shadow-md"> POSISIKAN <span class="text-red-400">VIN (MHK/PM2)</span> DI DALAM KOTAK </span>
+            <!-- KOTAK DIPERSEMPIT MENJADI 12% AGAR BARCODE TIDAK IKUT MASUK -->
+            <div class="w-[90%] h-[12%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
+              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> FOKUSKAN PADA TEKS VIN. <span class="text-red-400">JANGAN MASUKKAN BARCODE.</span> </span>
               <div class="w-full h-[1px] bg-red-500/50 absolute top-1/2"></div>
             </div>
           </div>
@@ -390,7 +391,6 @@ const stopScanner = () => {
   isScanning.value = false;
 };
 
-// Fungsi OCR Cerdas: Kualitas 100% dan Buldoser Karakter
 const takeSnapshotAndRead = async () => {
   if (!videoElement.value) return;
   isProcessing.value = true;
@@ -400,7 +400,8 @@ const takeSnapshotAndRead = async () => {
     const vWidth = video.videoWidth;
     const vHeight = video.videoHeight;
     const cropWidth = vWidth * 0.9;
-    const cropHeight = vHeight * 0.25;
+    // PENTING: Ketinggian crop diturunkan drastis (12%) untuk mencegah barcode ikut tertangkap
+    const cropHeight = vHeight * 0.12;
     const startX = (vWidth - cropWidth) / 2;
     const startY = (vHeight - cropHeight) / 2;
 
@@ -411,14 +412,13 @@ const takeSnapshotAndRead = async () => {
 
     ctx.drawImage(video, startX, startY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
 
-    // Kualitas gambar 100% (1.0) untuk mengatasi kamera buram di lapangan
     const base64CroppedImage = canvas.toDataURL("image/jpeg", 1.0);
 
     const formData = new FormData();
     formData.append("base64Image", base64CroppedImage);
     formData.append("apikey", "helloworld");
     formData.append("OCREngine", "1");
-    formData.append("scale", "true"); // Mempertajam otomatis
+    formData.append("scale", "true");
 
     const response = await fetch("https://api.ocr.space/parse/image", {
       method: "POST",
@@ -428,15 +428,20 @@ const takeSnapshotAndRead = async () => {
     const result = await response.json();
 
     if (result && result.ParsedResults && result.ParsedResults.length > 0) {
-      // 1. BULDOSER: Hapus SEMUA karakter selain A-Z dan 0-9 secara paksa
-      let cleanText = result.ParsedResults[0].ParsedText.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
 
-      // 2. TYPO FIXER: Perbaiki kesalahan baca OCR sebelum mencari VIN
-      cleanText = cleanText.replace(/I/g, "1").replace(/O/g, "0").replace(/Q/g, "0");
+      // 1. Perbaikan Typo Cerdas pada huruf yang mirip angka
+      rawText = rawText.replace(/I/g, "1").replace(/O/g, "0").replace(/Q/g, "0");
 
-      // 3. REGEX PENCARIAN
+      // 2. Pembersihan simbol tanpa menghapus spasi awal
+      rawText = rawText.replace(/[^A-Z0-9\s]/g, "");
+
+      // 3. Menghapus semua spasi hanya saat pencarian VIN dilakukan
+      const giantString = rawText.replace(/\s+/g, "");
+
+      // 4. Pencarian pola 17 digit VIN Daihatsu
       const vinRegex = /(MHK|PM2)[A-Z0-9]{14}/g;
-      const foundVINs = cleanText.match(vinRegex);
+      const foundVINs = giantString.match(vinRegex);
 
       if (foundVINs) {
         form.no_rangka = foundVINs[0];
@@ -445,7 +450,7 @@ const takeSnapshotAndRead = async () => {
         } catch (e) {}
         stopScanner();
       } else {
-        alert("Gagal mendeteksi VIN. Teks yang tertangkap:\n" + cleanText);
+        alert("Gagal mendeteksi VIN. Teks yang tertangkap:\n" + rawText);
       }
     } else {
       alert("Gambar tidak jelas. Pastikan cahaya cukup dan fokus.");
