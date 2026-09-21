@@ -390,7 +390,7 @@ const stopScanner = () => {
   isScanning.value = false;
 };
 
-// Fungsi OCR Resolusi 100% & Engine 1 (Cepat, Akurat untuk Font Tebal, Support Kamera Buram)
+// Fungsi OCR Cerdas: Kualitas 100% dan Buldoser Karakter
 const takeSnapshotAndRead = async () => {
   if (!videoElement.value) return;
   isProcessing.value = true;
@@ -405,20 +405,20 @@ const takeSnapshotAndRead = async () => {
     const startY = (vHeight - cropHeight) / 2;
 
     const canvas = document.createElement("canvas");
-    // Resolusi tetap 100% agar kamera HP buram tetap bisa menangkap gambar dengan jelas
     canvas.width = cropWidth;
     canvas.height = cropHeight;
     const ctx = canvas.getContext("2d");
 
     ctx.drawImage(video, startX, startY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
-    // Kompresi JPEG 85% untuk mengimbangi resolusi besar agar tetap cepat di-upload
-    const base64CroppedImage = canvas.toDataURL("image/jpeg", 0.85);
+
+    // Kualitas gambar 100% (1.0) untuk mengatasi kamera buram di lapangan
+    const base64CroppedImage = canvas.toDataURL("image/jpeg", 1.0);
 
     const formData = new FormData();
     formData.append("base64Image", base64CroppedImage);
     formData.append("apikey", "helloworld");
-    formData.append("OCREngine", "1"); // Engine 1 sangat cerdas baca font tebal (Bold) seperti BA1
-    formData.append("scale", "true"); // Membantu AI mempertajam gambar kamera buram
+    formData.append("OCREngine", "1");
+    formData.append("scale", "true"); // Mempertajam otomatis
 
     const response = await fetch("https://api.ocr.space/parse/image", {
       method: "POST",
@@ -428,26 +428,24 @@ const takeSnapshotAndRead = async () => {
     const result = await response.json();
 
     if (result && result.ParsedResults && result.ParsedResults.length > 0) {
-      // Bersihkan spasi, strip, garis bawah
-      const scannedText = result.ParsedResults[0].ParsedText.replace(/[\s\-_]/g, "").toUpperCase();
+      // 1. BULDOSER: Hapus SEMUA karakter selain A-Z dan 0-9 secara paksa
+      let cleanText = result.ParsedResults[0].ParsedText.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-      // Regex dibuat lebih pemaaf: Mengizinkan AI salah baca angka/huruf sementara waktu
+      // 2. TYPO FIXER: Perbaiki kesalahan baca OCR sebelum mencari VIN
+      cleanText = cleanText.replace(/I/g, "1").replace(/O/g, "0").replace(/Q/g, "0");
+
+      // 3. REGEX PENCARIAN
       const vinRegex = /(MHK|PM2)[A-Z0-9]{14}/g;
-      const foundVINs = scannedText.match(vinRegex);
+      const foundVINs = cleanText.match(vinRegex);
 
       if (foundVINs) {
-        let finalVIN = foundVINs[0];
-        // Typo Fixer: Mengkoreksi otomatis kesalahan umum AI pada kamera buram
-        // Mengubah I dan O menjadi 1 dan 0, karena standar VIN Daihatsu tidak memakai huruf I, O, Q
-        finalVIN = finalVIN.replace(/I/g, "1").replace(/O/g, "0").replace(/Q/g, "0");
-
-        form.no_rangka = finalVIN;
+        form.no_rangka = foundVINs[0];
         try {
           navigator.vibrate(200);
         } catch (e) {}
         stopScanner();
       } else {
-        alert("Gagal mendeteksi VIN. Teks yang tertangkap: " + (scannedText || "Kosong"));
+        alert("Gagal mendeteksi VIN. Teks yang tertangkap:\n" + cleanText);
       }
     } else {
       alert("Gambar tidak jelas. Pastikan cahaya cukup dan fokus.");
