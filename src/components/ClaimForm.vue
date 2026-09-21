@@ -30,9 +30,9 @@
           <video ref="videoElement" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
 
           <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 bg-black/40">
-            <!-- KOTAK DIPERSEMPIT MENJADI 12% AGAR BARCODE TIDAK IKUT MASUK -->
-            <div class="w-[90%] h-[12%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
-              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> FOKUSKAN PADA TEKS VIN. <span class="text-red-400">BUKAN BARCODE.</span> </span>
+            <!-- KOTAK DIPERLEBAR JADI 18% AGAR TEKS WARNA DAN VIN BISA MASUK SEKALIGUS -->
+            <div class="w-[90%] h-[18%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
+              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> POSISIKAN <span class="text-red-400">WARNA & VIN</span> DI DALAM KOTAK </span>
               <div class="w-full h-[1px] bg-red-500/50 absolute top-1/2"></div>
             </div>
           </div>
@@ -400,8 +400,8 @@ const takeSnapshotAndRead = async () => {
     const vWidth = video.videoWidth;
     const vHeight = video.videoHeight;
     const cropWidth = vWidth * 0.9;
-    // PENTING: Ketinggian crop diturunkan drastis (12%) untuk mencegah barcode ikut tertangkap
-    const cropHeight = vHeight * 0.12;
+    // Tinggi kotak diperbesar menjadi 18% untuk menampung baris warna & VIN
+    const cropHeight = vHeight * 0.18;
     const startX = (vWidth - cropWidth) / 2;
     const startY = (vHeight - cropHeight) / 2;
 
@@ -430,21 +430,44 @@ const takeSnapshotAndRead = async () => {
     if (result && result.ParsedResults && result.ParsedResults.length > 0) {
       let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
 
-      // 1. Perbaikan Typo Cerdas pada huruf yang mirip angka
-      rawText = rawText.replace(/I/g, "1").replace(/O/g, "0").replace(/Q/g, "0");
+      // ==========================================
+      // 1. DETEKSI WARNA (Sebelum teks dibersihkan)
+      // ==========================================
+      let detectedColor = "";
+      for (let w of options.warna) {
+        if (rawText.includes(w)) {
+          detectedColor = w;
+          break;
+        }
+      }
 
-      // 2. Pembersihan simbol tanpa menghapus spasi awal
-      rawText = rawText.replace(/[^A-Z0-9\s]/g, "");
+      // Fallback cerdas jika kamera buram menyebabkan Typo pada nama warna
+      if (!detectedColor) {
+        if (rawText.includes("WH1TE") || rawText.includes("WHTE")) detectedColor = "WHITE";
+        if (rawText.includes("S1LVER") || rawText.includes("SLVER")) detectedColor = "SILVER";
+        if (rawText.includes("8LACK") || rawText.includes("BLCK")) detectedColor = "BLACK";
+        if (rawText.includes("6REY")) detectedColor = "GREY";
+      }
 
-      // 3. Menghapus semua spasi hanya saat pencarian VIN dilakukan
-      const giantString = rawText.replace(/\s+/g, "");
+      // ==========================================
+      // 2. EKSTRAKSI & PENCARIAN VIN
+      // ==========================================
+      // Perbaikan Typo VIN pada huruf yang mirip angka
+      let cleanText = rawText.replace(/I/g, "1").replace(/O/g, "0").replace(/Q/g, "0");
 
-      // 4. Pencarian pola 17 digit VIN Daihatsu
+      // Buldoser pembersih simbol & spasi
+      cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
+
       const vinRegex = /(MHK|PM2)[A-Z0-9]{14}/g;
-      const foundVINs = giantString.match(vinRegex);
+      const foundVINs = cleanText.match(vinRegex);
 
       if (foundVINs) {
+        // Eksekusi pengisian form otomatis
         form.no_rangka = foundVINs[0];
+        if (detectedColor) {
+          form.warna = detectedColor;
+        }
+
         try {
           navigator.vibrate(200);
         } catch (e) {}
