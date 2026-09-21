@@ -159,7 +159,6 @@ const getId = (item) => {
   return item["Timestamp"] || item["timestamp"] || item["0"] || Object.values(item)[0];
 };
 
-// Filter riwayat HANYA untuk pengguna yang sedang Login
 const myHistory = computed(() => {
   return history.value.filter((item) => getVal(item, ["Stempel QC", "stempel_qc"]) === currentUser.value);
 });
@@ -182,7 +181,6 @@ const handleResetForm = () => {
   selectedItem.value = null;
 };
 
-// --- LOGIKA OPTIMISTIC UI ---
 const handleFormSubmit = async (formData) => {
   loading.value = true;
 
@@ -210,8 +208,12 @@ const handleFormSubmit = async (formData) => {
   }
 
   Swal.fire({ icon: "success", title: "Tersimpan!", timer: 1200, showConfirmButton: false });
+
   selectedItem.value = null;
-  currentView.value = "history";
+
+  // PERUBAHAN: Tetap di halaman form setelah tombol simpan ditekan
+  currentView.value = "form";
+
   loading.value = false;
 
   try {

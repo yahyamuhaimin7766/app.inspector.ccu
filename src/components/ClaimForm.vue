@@ -406,9 +406,6 @@ const takeSnapshotAndRead = async () => {
     if (result && result.ParsedResults && result.ParsedResults.length > 0) {
       let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
 
-      // ========================================================
-      // 1. FILTER DAFTAR PUTIH WARNA (Blokir selain 8 warna ini)
-      // ========================================================
       let detectedColor = "";
       for (let w of options.warna) {
         if (rawText.includes(w)) {
@@ -417,7 +414,6 @@ const takeSnapshotAndRead = async () => {
         }
       }
 
-      // Jika warna tidak tertangkap karena typo (kamera buram), perbaiki!
       if (!detectedColor) {
         if (rawText.includes("WH1TE") || rawText.includes("WHTE")) detectedColor = "WHITE";
         if (rawText.includes("S1LVER") || rawText.includes("SLVER")) detectedColor = "SILVER";
@@ -425,16 +421,9 @@ const takeSnapshotAndRead = async () => {
         if (rawText.includes("6REY")) detectedColor = "GREY";
       }
 
-      // ========================================================
-      // 2. FILTER DAFTAR PUTIH VIN (Blokir semua kecuali MHK/PM2)
-      // ========================================================
-      // Hapus Typo dulu sebelum dicari
       let cleanText = rawText.replace(/I/g, "1").replace(/O/g, "0").replace(/Q/g, "0");
-      // Sapu bersih spasi dan simbol, jadikan 1 teks panjang
       cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
 
-      // LOGIKA BLOKIR MUTLAK: Ekstrak HANYA yang 17 digit berawalan MHK atau PM2.
-      // Kata "VEHICLE" atau "ENGINE" akan sepenuhnya diabaikan dan terbuang otomatis.
       const vinRegex = /(MHK|PM2)[A-Z0-9]{14}/g;
       const foundVINs = cleanText.match(vinRegex);
 
@@ -470,8 +459,10 @@ const handleSubmit = () => {
     return;
   }
 
-  // Menggabungkan form data dengan ID QC pengguna dari sesi (dikirim dari App.vue)
   emit("submit", { ...form, stempel_qc: props.qcId });
+
+  // PERUBAHAN: Setelah submit, form seketika dibersihkan otomatis (kecuali tanggal harian)
+  Object.assign(form, getInitialForm());
 };
 
 const handleReset = () => {
