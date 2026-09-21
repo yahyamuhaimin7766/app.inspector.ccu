@@ -32,7 +32,7 @@
           <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 bg-black/40">
             <!-- KOTAK DIPERSEMPIT MENJADI 12% AGAR BARCODE TIDAK IKUT MASUK -->
             <div class="w-[90%] h-[12%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
-              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> FOKUSKAN PADA TEKS VIN. <span class="text-red-400">JANGAN MASUKKAN BARCODE.</span> </span>
+              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> FOKUSKAN PADA TEKS VIN. <span class="text-red-400">BUKAN BARCODE.</span> </span>
               <div class="w-full h-[1px] bg-red-500/50 absolute top-1/2"></div>
             </div>
           </div>
