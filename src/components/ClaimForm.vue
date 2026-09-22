@@ -118,7 +118,7 @@
         <input
           type="number"
           v-model="form.km"
-          placeholder="Contoh: 1500"
+          placeholder="Contoh: 86"
           class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs"
         />
       </div>
@@ -470,3 +470,4 @@ const handleReset = () => {
   emit("reset");
 };
 </script>
+  
