@@ -5,43 +5,24 @@
       <input type="date" v-model="form.tanggal" required class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs" />
     </div>
 
-    <!-- No Rangka + Kamera -->
+    <!-- No Rangka + Input File iOS Asli -->
     <div class="space-y-1.5">
       <div class="flex justify-between items-center">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">No Rangka (VIN) *</label>
-        <button type="button" @click="toggleScanner" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200 transition shadow-xs">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-            />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          <span>{{ isScanning ? "Tutup Kamera" : "Jepret Barcode VIN" }}</span>
-        </button>
       </div>
 
-      <div v-show="isScanning" class="bg-slate-900 rounded-2xl overflow-hidden p-2 border-2 border-blue-500 relative shadow-xl space-y-2 mt-2">
-        <div class="relative w-full h-[300px] bg-black rounded-xl overflow-hidden flex items-center justify-center">
-          <video ref="videoElement" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
+      <!-- Tombol Pemanggil Kamera Bawaan HP -->
+      <div class="relative w-full">
+        <!-- Input File disembunyikan tapi diakses lewat label/tombol -->
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" @change="handleNativeCamera" class="hidden" :disabled="isProcessing" />
 
-          <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 bg-black/40">
-            <!-- Frame merah 25% pembidik Barcode -->
-            <div class="w-[90%] h-[25%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
-              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> POSISIKAN SEMUA BARCODE DI KOTAK </span>
-              <div class="w-full h-[1px] bg-red-500/50 absolute top-1/2"></div>
-            </div>
-          </div>
-
-          <button
-            v-if="!isProcessing"
-            type="button"
-            @click="takeSnapshotAndRead"
-            class="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 bg-blue-600 border-2 border-white text-white font-bold py-2.5 px-6 rounded-full text-sm shadow-xl hover:bg-blue-700 transition flex items-center gap-2"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <label
+          for="cameraInput"
+          class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-lg cursor-pointer hover:bg-slate-800 transition border-2 border-blue-500"
+          :class="{ 'opacity-75 pointer-events-none': isProcessing }"
+        >
+          <div v-if="!isProcessing" class="flex flex-col items-center">
+            <svg class="w-8 h-8 text-blue-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -50,25 +31,22 @@
               />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span>Jepret & Cari Barcode</span>
-          </button>
-
-          <div v-else class="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 bg-slate-800 border-2 border-slate-600 text-white font-bold py-2.5 px-6 rounded-full text-sm shadow-xl flex items-center gap-2">
-            <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            Mencari Barcode...
+            <span class="text-sm">Buka Kamera HP (Lebih Jernih & Stabil)</span>
+            <span class="text-[10px] text-slate-400 font-normal">Aman untuk iPhone / iOS</span>
           </div>
-        </div>
 
-        <button type="button" @click="stopScanner" class="w-full bg-red-600 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-red-700 transition flex items-center justify-center gap-1.5 shadow-md">
-          <span>Tutup Kamera Scanner</span>
-        </button>
+          <div v-else class="flex items-center gap-3">
+            <span class="w-6 h-6 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
+            <span>Menganalisa Foto Label...</span>
+          </div>
+        </label>
       </div>
 
-      <div class="relative">
+      <div class="relative mt-2">
         <input
           type="text"
           v-model="form.no_rangka"
-          placeholder="Scan Barcode atau ketik..."
+          placeholder="Scan OCR atau ketik..."
           required
           class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs font-mono tracking-wide font-bold"
         />
@@ -90,7 +68,7 @@
       </div>
     </div>
 
-    <!-- Warna Grid (Manual karena Barcode tidak simpan nama warna) -->
+    <!-- Warna Grid -->
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Warna *</label>
       <div class="grid grid-cols-4 gap-2">
@@ -109,6 +87,7 @@
       </div>
     </div>
 
+    <!-- Sisa Form (Sama Saja) -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="space-y-1.5">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">KM / ODO</label>
@@ -162,7 +141,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onBeforeUnmount, nextTick, watch } from "vue";
+import { reactive, ref, watch } from "vue";
 
 const props = defineProps({
   loading: Boolean,
@@ -300,10 +279,7 @@ const getInitialForm = () => ({
 });
 
 const form = reactive(getInitialForm());
-const isScanning = ref(false);
 const isProcessing = ref(false);
-const videoElement = ref(null);
-let mediaStream = null;
 
 watch(
   () => props.editData,
@@ -336,99 +312,118 @@ watch(
   }
 );
 
-const toggleScanner = async () => {
-  if (isScanning.value) {
-    stopScanner();
-  } else {
-    isScanning.value = true;
-    await nextTick();
-    try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
-      });
-      if (videoElement.value) {
-        videoElement.value.srcObject = mediaStream;
-        videoElement.value.setAttribute("playsinline", true);
-        videoElement.value.play();
-      }
-    } catch (err) {
-      alert("Gagal mengakses kamera. Pastikan izin kamera aktif pada browser.");
-      isScanning.value = false;
-    }
-  }
-};
+// FUNGSI BARU: NATIVE KAMERA (Anti Macet di iPhone)
+const handleNativeCamera = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
 
-const stopScanner = () => {
-  if (mediaStream) {
-    mediaStream.getTracks().forEach((track) => track.stop());
-    mediaStream = null;
-  }
-  isScanning.value = false;
-};
-
-// API Pembaca Barcode ZXing (Gratis, membaca dari gambar base64)
-const takeSnapshotAndRead = async () => {
-  if (!videoElement.value) return;
   isProcessing.value = true;
 
-  try {
-    const video = videoElement.value;
-    const vWidth = video.videoWidth;
-    const vHeight = video.videoHeight;
-    const cropWidth = vWidth * 0.9;
-    const cropHeight = vHeight * 0.5; // Agak lebar agar semua barcode di label terambil
+  // Baca File dari iOS
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = async () => {
+      // Kita kompres gambarnya agar tidak terlalu besar (Hemat Kuota & Cepat)
+      const canvas = document.createElement("canvas");
+      const MAX_WIDTH = 1200;
+      const MAX_HEIGHT = 1200;
+      let width = img.width;
+      let height = img.height;
 
-    const startX = (vWidth - cropWidth) / 2;
-    const startY = (vHeight - cropHeight) / 2;
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
 
-    const canvas = document.createElement("canvas");
-    canvas.width = cropWidth;
-    canvas.height = cropHeight;
-    const ctx = canvas.getContext("2d");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
 
-    ctx.drawImage(video, startX, startY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+      const base64Image = canvas.toDataURL("image/jpeg", 0.8); // Kompresi ringan
 
-    // Convert to base64
-    const base64CroppedImage = canvas.toDataURL("image/jpeg", 1.0);
-    // Hapus header data:image/jpeg;base64,
-    const base64Data = base64CroppedImage.split(",")[1];
+      // Kirim ke OCR API Engine 1
+      const formData = new FormData();
+      formData.append("base64Image", base64Image);
+      formData.append("apikey", "helloworld");
+      formData.append("OCREngine", "1"); // Engine 1 untuk menerjang cacat cetak
+      formData.append("isTable", "true");
+      formData.append("scale", "true");
 
-    // Menggunakan API Zxing org (API Publik Gratis untuk membaca Barcode dari gambar)
-    const formData = new URLSearchParams();
-    formData.append("file", base64Data);
-
-    // Kita kirim ke API Barcode Reader
-    const response = await fetch("https://zxing.org/w/decode", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: formData,
-    });
-
-    const responseText = await response.text();
-
-    // ZXing API mengembalikan HTML, kita cukup mencari format VIN Daihatsu di dalamnya
-    const vinRegex = /(MHK|PM2)[A-Z0-9]{14}/g;
-    const match = responseText.toUpperCase().match(vinRegex);
-
-    if (match) {
-      form.no_rangka = match[0];
       try {
-        navigator.vibrate(200);
-      } catch (e) {}
-      stopScanner();
-    } else {
-      alert("Gagal membaca barcode VIN. Pastikan barcode lurus dan fokus.");
-    }
-  } catch (err) {
-    alert("Koneksi gagal atau Barcode tidak ditemukan.");
-  } finally {
-    isProcessing.value = false;
-  }
-};
+        const response = await fetch("https://api.ocr.space/parse/image", {
+          method: "POST",
+          body: formData,
+        });
 
-onBeforeUnmount(() => stopScanner());
+        const result = await response.json();
+
+        if (result && result.ParsedResults && result.ParsedResults.length > 0) {
+          let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
+
+          // Deteksi Warna
+          let detectedColor = "";
+          for (let w of options.warna) {
+            if (rawText.includes(w)) {
+              detectedColor = w;
+              break;
+            }
+          }
+          if (!detectedColor) {
+            if (rawText.includes("WH1TE") || rawText.includes("WHTE")) detectedColor = "WHITE";
+            if (rawText.includes("S1LVER") || rawText.includes("SLVER")) detectedColor = "SILVER";
+            if (rawText.includes("8LACK") || rawText.includes("BLCK")) detectedColor = "BLACK";
+            if (rawText.includes("6REY") || rawText.includes("GPEY")) detectedColor = "GREY";
+          }
+
+          // Pembersih Typo Super Agresif
+          let cleanText = rawText.replace(/I/g, "1").replace(/L/g, "1").replace(/\|/g, "1").replace(/!/g, "1").replace(/O/g, "0").replace(/Q/g, "0").replace(/D/g, "0");
+          cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
+
+          // Deteksi VIN
+          let mhkIndex = cleanText.indexOf("MHK");
+          if (mhkIndex === -1) mhkIndex = cleanText.indexOf("PM2");
+
+          if (mhkIndex !== -1 && cleanText.length >= mhkIndex + 17) {
+            let finalVin = cleanText.substring(mhkIndex, mhkIndex + 17);
+
+            // Koreksi cacat dari Engine 1
+            finalVin = finalVin.replace("8A1", "BA1");
+            finalVin = finalVin.replace("B41", "BA1");
+            finalVin = finalVin.replace("P38A1", "P3BA1");
+
+            form.no_rangka = finalVin;
+            if (detectedColor) form.warna = detectedColor;
+
+            try {
+              navigator.vibrate(200);
+            } catch (e) {}
+          } else {
+            alert("Gagal mendeteksi VIN. Teks yang ditangkap:\n" + rawText);
+          }
+        } else {
+          alert("Gagal membaca foto. Pastikan gambar jelas.");
+        }
+      } catch (err) {
+        alert("Gagal menghubungi server OCR. Periksa koneksi.");
+      } finally {
+        isProcessing.value = false;
+        // Kosongkan input file agar bisa jepret foto yang sama jika gagal
+        event.target.value = "";
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+};
 
 const handleSubmit = () => {
   if (!form.tipe || form.tipe === "Tipe Tidak Ditemukan") {
