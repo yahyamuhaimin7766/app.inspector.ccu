@@ -1,62 +1,19 @@
 <template>
   <form @submit.prevent="handleSubmit" class="p-4 md:p-6 space-y-6 max-w-xl mx-auto pb-28">
-    <!-- SAKLAR MODE ONLINE / OFFLINE -->
-    <div class="flex bg-slate-200 p-1 rounded-xl shadow-inner">
-      <button
-        type="button"
-        @click="isOfflineMode = false"
-        :class="!isOfflineMode ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:bg-slate-300'"
-        class="flex-1 py-2.5 text-xs font-bold rounded-lg transition-all flex justify-center items-center gap-1.5"
-      >
-        <svg v-if="!isOfflineMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          ></path>
-        </svg>
-        <span>Mode Online</span>
-      </button>
-      <button
-        type="button"
-        @click="isOfflineMode = true"
-        :class="isOfflineMode ? 'bg-white shadow text-amber-600' : 'text-slate-500 hover:bg-slate-300'"
-        class="flex-1 py-2.5 text-xs font-bold rounded-lg transition-all flex justify-center items-center gap-1.5"
-      >
-        <svg v-if="isOfflineMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"
-          ></path>
-        </svg>
-        <span>Mode Offline</span>
-      </button>
-    </div>
-
-    <!-- PEMBERITAHUAN MODE OFFLINE -->
-    <div v-if="isOfflineMode" class="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-xl font-medium flex items-center gap-2">
-      <svg class="w-5 h-5 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-      </svg>
-      <span>Mode Offline Aktif: Fitur scan kamera disembunyikan. Input dilakukan manual dan disimpan ke memori HP.</span>
-    </div>
-
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Tanggal *</label>
       <input type="date" v-model="form.tanggal" required class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs" />
     </div>
 
-    <!-- No Rangka + Tombol Kamera (Hanya muncul jika Mode Online) -->
+    <!-- No Rangka + Input File iOS Asli (Metode Foto) -->
     <div class="space-y-1.5">
       <div class="flex justify-between items-center">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">No Rangka (VIN) *</label>
       </div>
 
-      <!-- TOMBOL KAMERA (Hanya Tampil di Mode Online) -->
-      <div v-if="!isOfflineMode" class="relative w-full mb-2">
+      <!-- Tombol Pemanggil Kamera Bawaan HP -->
+      <div class="relative w-full">
+        <!-- Input File disembunyikan tapi diakses lewat label/tombol -->
         <input type="file" id="cameraInput" accept="image/*" capture="environment" @change="handleNativeCamera" class="hidden" :disabled="isProcessing" />
 
         <label
@@ -74,7 +31,7 @@
               />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span class="text-sm">Buka Kamera HP (Scan OCR)</span>
+            <span class="text-sm">Buka Kamera HP (Lebih Jernih)</span>
             <span class="text-[10px] text-slate-400 font-normal">Menggunakan OCR Engine 2</span>
           </div>
 
@@ -85,28 +42,29 @@
         </label>
       </div>
 
-      <div class="relative">
+      <div class="relative mt-2">
         <input
           type="text"
           v-model="form.no_rangka"
-          :placeholder="isOfflineMode ? 'Ketik No Rangka / Singkatan (Contoh: BA1 201128)...' : 'Scan OCR atau ketik manual...'"
+          placeholder="Scan OCR atau ketik singkatan manual..."
           required
           class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs font-mono tracking-wide font-bold"
         />
       </div>
     </div>
 
-    <!-- Tipe Kendaraan -->
+    <!-- Tipe Otomatis / Manual -->
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Tipe & Varian Kendaraan *</label>
       <input
         type="text"
         v-model="form.tipe"
-        placeholder="Ketik tipe kendaraan..."
+        placeholder="Otomatis atau ketik manual..."
         required
         class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs font-bold"
         :class="{ 'text-indigo-800 bg-indigo-50 border-indigo-300': form.tipe }"
       />
+      <p class="text-[10px] text-slate-500">Terisi otomatis dari 17 digit VIN. Bebas ketik manual jika input singkatan cacat.</p>
     </div>
 
     <!-- Warna Grid -->
@@ -320,7 +278,6 @@ const getInitialForm = () => ({
 
 const form = reactive(getInitialForm());
 const isProcessing = ref(false);
-const isOfflineMode = ref(false);
 
 watch(
   () => props.editData,
@@ -341,23 +298,25 @@ watch(
   { immediate: true }
 );
 
+// Auto-fill Tipe hanya jika panjangnya cukup, membiarkan override manual
 watch(
   () => form.no_rangka,
   (newVal) => {
-    if (newVal && !isOfflineMode.value) {
+    if (newVal) {
       const cleanVal = newVal.replace(/\s/g, "").toUpperCase();
       if (cleanVal.length >= 9) {
         const prefix = cleanVal.substring(0, 9);
         if (masterNik[prefix]) {
-          form.tipe = masterNik[prefix];
+          form.tipe = masterNik[prefix]; // Auto-fill jika terdaftar di Master NIK
         }
       }
-    } else if (!props.editData && !newVal) {
+    } else if (!props.editData) {
       form.tipe = "";
     }
   }
 );
 
+// FUNGSI NATIVE KAMERA IPHONE & OCR ENGINE 2
 const handleNativeCamera = (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -437,13 +396,13 @@ const handleNativeCamera = (event) => {
               navigator.vibrate(200);
             } catch (e) {}
           } else {
-            alert("Gagal mendeteksi VIN 17 digit.\nPindah ke Mode Offline jika ingin mengetik manual.");
+            alert("Gagal mendeteksi VIN 17 digit.\n\nJika label cacat, silakan ketik manual.");
           }
         } else {
           alert("Gagal membaca foto. Pastikan gambar jelas dan terang.");
         }
       } catch (err) {
-        alert("Gagal menghubungi server OCR. Silakan beralih ke Mode Offline untuk input manual.");
+        alert("Gagal menghubungi server OCR. Periksa koneksi internet Anda.");
       } finally {
         isProcessing.value = false;
         event.target.value = "";
@@ -468,25 +427,8 @@ const handleSubmit = () => {
     return;
   }
 
-  if (isOfflineMode.value) {
-    const existingOfflineData = JSON.parse(localStorage.getItem("qc_offline_data") || "[]");
-    const offlineItem = {
-      ...form,
-      id_lokal: Date.now(),
-      stempel_qc: props.qcId,
-      status: "Belum Upload",
-    };
-
-    existingOfflineData.unshift(offlineItem);
-    localStorage.setItem("qc_offline_data", JSON.stringify(existingOfflineData));
-
-    alert("Data berhasil disimpan secara offline di memori HP. Cek di menu Riwayat untuk upload.");
-    Object.assign(form, getInitialForm());
-    emit("reset");
-  } else {
-    emit("submit", { ...form, stempel_qc: props.qcId });
-    Object.assign(form, getInitialForm());
-  }
+  emit("submit", { ...form, stempel_qc: props.qcId });
+  Object.assign(form, getInitialForm());
 };
 
 const handleReset = () => {
