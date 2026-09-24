@@ -1,11 +1,12 @@
 <template>
   <form @submit.prevent="handleSubmit" class="p-4 md:p-6 space-y-6 max-w-xl mx-auto pb-28">
+    <!-- Tanggal -->
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Tanggal *</label>
       <input type="date" v-model="form.tanggal" required class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs" />
     </div>
 
-    <!-- No Rangka + Kamera Hybrid OCR -->
+    <!-- No Rangka + Kamera OCR -->
     <div class="space-y-1.5">
       <div class="flex justify-between items-center">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">No Rangka (VIN) *</label>
@@ -30,7 +31,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             <span class="text-sm">Buka Kamera (Robust OCR Pipeline)</span>
-            <span class="text-[10px] text-slate-400 font-normal">Sliding Window & Confusion Map</span>
+            <span class="text-[10px] text-slate-400 font-normal">Full Label Scan & Candidate Validation</span>
           </div>
 
           <div v-else class="flex flex-col items-center gap-2">
@@ -44,7 +45,6 @@
       </div>
 
       <div class="relative">
-        <!-- Hasil selalu dimasukkan ke sini, biarpun jelek, tidak ada popup error yang memblokir -->
         <input
           type="text"
           v-model="form.no_rangka"
@@ -87,35 +87,21 @@
       </div>
     </div>
 
+    <!-- Lainnya -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="space-y-1.5">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">KM / ODO</label>
-        <input
-          type="number"
-          v-model="form.km"
-          placeholder="Contoh: 86"
-          class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs"
-        />
+        <input type="number" v-model="form.km" placeholder="Contoh: 86" class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition" />
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Kode Accu</label>
-        <input
-          type="text"
-          v-model="form.kode_accu"
-          placeholder="Kode Accu"
-          class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs"
-        />
+        <input type="text" v-model="form.kode_accu" placeholder="Kode Accu" class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition" />
       </div>
     </div>
 
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Defect</label>
-      <input
-        type="text"
-        v-model="form.defect"
-        placeholder="Jenis kerusakannya..."
-        class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs"
-      />
+      <input type="text" v-model="form.defect" placeholder="Jenis kerusakannya..." class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition" />
     </div>
 
     <div class="space-y-1.5">
@@ -124,17 +110,14 @@
         v-model="form.ket_defect"
         rows="3"
         placeholder="Contoh: RR LH, bocor, terlipat"
-        class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs"
+        class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"
       ></textarea>
     </div>
 
+    <!-- Actions -->
     <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 flex gap-3 max-w-xl mx-auto z-20 shadow-lg">
       <button type="button" @click="handleReset" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 rounded-xl transition">Batal</button>
-      <button
-        type="submit"
-        :disabled="loading || isProcessing"
-        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30"
-      >
+      <button type="submit" :disabled="loading || isProcessing" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition disabled:opacity-50 flex items-center justify-center gap-2">
         <span v-if="loading" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
         <span>{{ loading ? "Memproses..." : editData ? "Update Data" : "Simpan Data" }}</span>
       </button>
@@ -228,133 +211,135 @@ watch(
 );
 
 // ==========================================
-// ROBUST VIN OCR ARCHITECTURE
+// 1. SCORING ENGINE (VDS PATTERN VALIDATION)
 // ==========================================
+function scoreVin(vin) {
+  let score = 0;
 
-const RobustVINPipeline = {
-  // 1. Scoring Logic
-  scoreVin(vin) {
-    let score = 0;
-    if (vin.length === 17) score += 50;
+  // Format Utama
+  if (vin.length === 17) score += 50;
 
-    // Toleransi jika prefix mirip MHK (misal NHK, MHK, M8K) akan diselamatkan oleh mutasi
-    if (vin.startsWith("MHK") || vin.startsWith("PM2")) {
-      score += 30;
+  // Prefix Check (Daihatsu Indonesia: MHK / PM2)
+  if (vin.startsWith("MHK") || vin.startsWith("PM2")) score += 50;
+  else if (vin.startsWith("NHK") || vin.startsWith("M8K")) score += 20;
+
+  // Aturan VDS (Vehicle Descriptor Section)
+  // Karakter ke-5 (indeks 4) harus angka. Ini kunci untuk membedakan 'S' dan '3'
+  if (vin.length >= 5 && /[0-9]/.test(vin[4])) {
+    score += 30; // Bonus besar jika angka
+  } else if (vin.length >= 5 && /[A-Z]/.test(vin[4])) {
+    score -= 20; // Penalti jika huruf (seperti S)
+  }
+
+  // Karakter Ilegal (I, O, Q)
+  if (!/[IOQ]/.test(vin)) score += 10;
+
+  return score;
+}
+
+// ==========================================
+// 2. CANDIDATE GENERATION & CONFUSION MODEL
+// ==========================================
+function extractAndGenerateCandidates(rawOcrText) {
+  if (!rawOcrText) return [];
+
+  let candidates = [];
+
+  // A. Pecah semua teks berdasarkan spasi / baris baru (Tokenization)
+  let tokens = rawOcrText.toUpperCase().split(/\s+/);
+
+  // B. Tambahkan juga versi nyambung tanpa spasi (jika OCR menghapus spasi)
+  let continuousText = rawOcrText.toUpperCase().replace(/\s+/g, "");
+  tokens.push(continuousText);
+
+  // C. Gunakan REGEX untuk mengekstrak string panjang di dalam continuous text
+  let mMatch = continuousText.match(/M[A-Z0-9]{15,18}/g);
+  if (mMatch) tokens.push(...mMatch);
+
+  let pMatch = continuousText.match(/P[A-Z0-9]{15,18}/g);
+  if (pMatch) tokens.push(...pMatch);
+
+  // Evaluasi setiap token
+  tokens.forEach((token) => {
+    // Bersihkan karakter aneh dan standarisasi
+    let base = token.replace(/[^A-Z0-9]/g, "");
+    base = base.replace(/[IL|!]/g, "1").replace(/[OQD]/g, "0");
+
+    // Pastikan kita memotong tepat 17 digit jika kelebihan
+    if (base.length > 17 && (base.startsWith("MHK") || base.startsWith("PM2"))) {
+      base = base.substring(0, 17);
     }
 
-    // Evaluasi karakter ke-5 (VDS). Pada MHKP3, indeks ke-4 adalah angka 3.
-    if (vin.length > 4 && /[0-9]/.test(vin[4])) {
-      score += 20; // Bonus besar jika terdeteksi angka (mengalahkan 'S')
-    }
+    if (base.length >= 10) {
+      // Hanya proses string panjang
+      // Kandidat Asli
+      candidates.push({ text: base, score: scoreVin(base) });
 
-    return score;
-  },
-
-  // 2. Sliding Window & Candidate Generation
-  extractAndGenerateCandidates(rawText) {
-    if (!rawText) return [];
-
-    // Bersihkan spasi dan karakter aneh
-    let clean = rawText.toUpperCase().replace(/[^A-Z0-9]/g, "");
-
-    // Koreksi mutlak (I, O, Q tidak pernah ada di VIN global)
-    clean = clean.replace(/[IL]/g, "1").replace(/[OQD]/g, "0");
-
-    let stringSlices = [];
-
-    // Memecah teks kotor menjadi potongan-potongan 17 karakter (Sliding Window)
-    // Jika misal OCR baca: "PTASTRA MHKPSBA1JTK201519 COLOR", ini akan otomatis menarik 17 digitnya.
-    if (clean.length <= 17) {
-      stringSlices.push(clean);
-    } else {
-      for (let i = 0; i <= clean.length - 17; i++) {
-        stringSlices.push(clean.substring(i, i + 17));
-      }
-    }
-
-    let candidates = [];
-
-    // Bangun mutasi untuk setiap potongan string
-    for (let str of stringSlices) {
-      // Masukkan hasil mentah sebagai kandidat dasar
-      candidates.push({ text: str, score: this.scoreVin(str) });
-
-      // Mutasi Khusus Indeks 4: Sering tertukar S <-> 3
-      if (str.length > 4 && (str[4] === "S" || str[4] === "5")) {
-        let arr = str.split("");
+      // MUTASI 1: Kasus MHKPS -> MHKP3
+      if (base.length >= 5 && (base[4] === "S" || base[4] === "5")) {
+        let arr = base.split("");
         arr[4] = "3";
         let mut = arr.join("");
-        candidates.push({ text: mut, score: this.scoreVin(mut) });
+        candidates.push({ text: mut, score: scoreVin(mut) });
       }
 
-      // Mutasi Khusus Awalan: N <-> M (Misal NHK -> MHK)
-      if (str.startsWith("NHK")) {
-        let arr = str.split("");
-        arr[0] = "M";
-        let mut = arr.join("");
-        candidates.push({ text: mut, score: this.scoreVin(mut) });
+      // MUTASI 2: Kasus NHK -> MHK
+      if (base.startsWith("NHK") || base.startsWith("M8K")) {
+        let mut = "MHK" + base.substring(3);
+        candidates.push({ text: mut, score: scoreVin(mut) });
       }
     }
+  });
 
-    return candidates;
-  },
-
-  // 3. Eksekusi
-  resolveBestVIN(observations) {
-    let allCandidates = [];
-    observations.forEach((obs) => {
-      let candidates = this.extractAndGenerateCandidates(obs);
-      allCandidates = allCandidates.concat(candidates);
-    });
-
-    // Urutkan dari skor tertinggi
-    allCandidates.sort((a, b) => b.score - a.score);
-
-    // KEMBALIKAN APAPUN HASIL TERTINGGINYA (Tidak ada batasan minimal skor!)
-    return allCandidates.length > 0 ? allCandidates[0].text : "";
-  },
-};
+  return candidates;
+}
 
 // ==========================================
-// PREPROCESSING & API CALL
+// 3. IMAGE PREPROCESSING (TANPA CROP)
 // ==========================================
-function getCroppedVariant(imgElement, type) {
+function getResizedVariant(imgElement, type) {
   const canvas = document.createElement("canvas");
-  // Crop 100% lebar, 40% tinggi persis di area tengah foto (membuang noise pinggir)
-  const cWidth = imgElement.width;
-  const cHeight = imgElement.height * 0.4;
-  canvas.width = cWidth;
-  canvas.height = cHeight;
+  // HANYA RESIZE UTUH, TIDAK MEMOTONG (CROP). Ini menyelesaikan masalah "SAPMA13302"
+  const MAX_WIDTH = 1000;
+  let width = imgElement.width;
+  let height = imgElement.height;
 
+  if (width > MAX_WIDTH) {
+    height = height * (MAX_WIDTH / width);
+    width = MAX_WIDTH;
+  }
+
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d");
-  const startY = (imgElement.height - cHeight) / 2;
+  ctx.drawImage(imgElement, 0, 0, width, height);
 
-  ctx.drawImage(imgElement, 0, startY, cWidth, cHeight, 0, 0, cWidth, cHeight);
-
-  const imgData = ctx.getImageData(0, 0, cWidth, cHeight);
-  const data = imgData.data;
-
-  // Variant Kontras Ekstrem untuk mengatasi tinta memudar
-  if (type === "high-contrast") {
+  if (type === "grayscale") {
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const data = imgData.data;
     for (let i = 0; i < data.length; i += 4) {
       let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      avg = avg < 130 ? 0 : 255;
       data[i] = avg;
       data[i + 1] = avg;
-      data[i + 2] = avg;
+      data[i + 2] = avg; // Jadikan Abu-abu
     }
+    ctx.putImageData(imgData, 0, 0);
   }
-  ctx.putImageData(imgData, 0, 0);
+
   return canvas.toDataURL("image/jpeg", 0.8);
 }
 
-async function callOCRSensor(base64Image, isTable) {
+// ==========================================
+// 4. API SENSOR EXECUTION
+// ==========================================
+async function callOCRSensor(base64Image) {
   const formData = new FormData();
   formData.append("base64Image", base64Image);
   formData.append("apikey", "helloworld");
   formData.append("OCREngine", "2");
   formData.append("scale", "true");
-  formData.append("isTable", isTable);
+  // isTable=true membantu membaca label yang layoutnya berantakan
+  formData.append("isTable", "true");
 
   try {
     const response = await fetch("https://api.ocr.space/parse/image", { method: "POST", body: formData });
@@ -363,7 +348,7 @@ async function callOCRSensor(base64Image, isTable) {
       return result.ParsedResults[0].ParsedText;
     }
   } catch (e) {
-    console.error("OCR Sensor failed", e);
+    console.error("OCR Sensor fail", e);
   }
   return "";
 }
@@ -373,55 +358,46 @@ const executeOCRPipeline = (event) => {
   if (!file) return;
 
   isProcessing.value = true;
-  pipelineStatus.value = "1. Crop Image...";
+  pipelineStatus.value = "1. Membaca Label Utuh...";
 
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
     img.onload = async () => {
       try {
-        // Limit resolusi agar API tidak menolak
-        const MAX_WIDTH = 1200;
-        if (img.width > MAX_WIDTH) {
-          img.height = img.height * (MAX_WIDTH / img.width);
-          img.width = MAX_WIDTH;
-        }
+        pipelineStatus.value = "2. Enhancing Image...";
+        // Buat 1 varian Grayscale utuh tanpa dipotong
+        const imgGrayscale = getResizedVariant(img, "grayscale");
 
-        pipelineStatus.value = "2. Build Variants...";
-        const varNormal = getCroppedVariant(img, "normal");
-        const varContrast = getCroppedVariant(img, "high-contrast");
+        pipelineStatus.value = "3. Ekstraksi Data (API Engine 2)...";
+        const rawOcrResult = await callOCRSensor(imgGrayscale);
 
-        // MENGHINDARI RATE LIMIT: Lakukan pemanggilan secara berurutan (Sequential), bukan paralel (Promise.all)
-        pipelineStatus.value = "3. Reading Sensor 1...";
-        const obs1 = await callOCRSensor(varNormal, "false");
+        pipelineStatus.value = "4. Menjalankan Model Kebingungan...";
 
-        pipelineStatus.value = "4. Reading Sensor 2...";
-        const obs2 = await callOCRSensor(varContrast, "true");
+        let allCandidates = extractAndGenerateCandidates(rawOcrResult);
+        allCandidates.sort((a, b) => b.score - a.score);
 
-        pipelineStatus.value = "5. Candidate Scoring...";
-        const finalVin = RobustVINPipeline.resolveBestVIN([obs1, obs2]);
+        // Jika berhasil mendapat kandidat apapun, masukkan. Jika gagal, masukkan raw (kasar).
+        if (allCandidates.length > 0) {
+          form.no_rangka = allCandidates[0].text;
 
-        // ========================================================
-        // TIDAK ADA POPUP ERROR. APAPUN HASILNYA MASUKKAN KE INPUT
-        // ========================================================
-        form.no_rangka = finalVin || ""; // Taruh hasil tebakan terbaik ke kolom teks
-
-        if (form.no_rangka.length > 0) {
+          // Tebak warna dari hasil mentah (kalau ada)
+          const rawJoined = rawOcrResult.toUpperCase();
+          for (let w of options.warna) {
+            if (rawJoined.includes(w)) {
+              form.warna = w;
+              break;
+            }
+          }
           try {
             navigator.vibrate(200);
           } catch (v) {}
-        }
-
-        // Coba tebak warna otomatis dari teks kotor
-        const rawJoined = [obs1, obs2].join(" ").toUpperCase();
-        for (let w of options.warna) {
-          if (rawJoined.includes(w)) {
-            form.warna = w;
-            break;
-          }
+        } else {
+          // Jika label benar-benar rusak, tampilkan 17 huruf pertama yang ketemu
+          let fallback = rawOcrResult.replace(/[^a-zA-Z0-9]/g, "").substring(0, 17);
+          form.no_rangka = fallback;
         }
       } catch (err) {
-        // Ini hanya muncul jika perangkat mati internet total
         alert("Gagal menghubungi server. Silakan ketik manual.");
       } finally {
         isProcessing.value = false;
