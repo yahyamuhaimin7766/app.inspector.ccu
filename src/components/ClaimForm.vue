@@ -33,7 +33,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span class="text-sm text-center px-4">{{ pipelineError ? 'Label VIN tidak ditemukan. Foto Ulang' : 'Buka Kamera (Geometric OCR)' }}</span>
+            <span class="text-sm text-center px-4">{{ pipelineError ? 'Label VIN tidak terbaca. Foto Ulang.' : 'Buka Kamera (Geometric OCR)' }}</span>
             <span class="text-[10px] text-slate-400 font-normal">Spatial Label-Value Pairing Active</span>
           </div>
 
@@ -169,85 +169,135 @@ watch(() => form.no_rangka, (newVal) => {
 });
 
 /* ====================================================================
-   1. GEOMETRIC SEARCH (FIELD ASSOCIATION)
+   ROBUST GEOMETRIC OCR PIPELINE
 ==================================================================== */
-function calculateSimilarity(str1, str2) {
-  let matches = 0;
-  let len = Math.min(str1.length, str2.length);
-  for (let i = 0; i < len; i++) {
-    if (str1[i] === str2[i]) matches++;
-  }
-  return matches / Math.max(str1.length, str2.length);
+
+// STEP 1: NORMALISASI OCR LINES (Berbasis 'Words' yang valid secara spasial)
+function normalizeOCRLines(rawLines) {
+  if (!rawLines) return [];
+  
+  return rawLines.map(line => {
+    const words = line.Words || [];
+    if (words.length === 0) return null;
+
+    const text = words.map(w => w.WordText || "").join(" ").trim();
+    const left = Math.min(...words.map(w => w.Left));
+    const top = Math.min(...words.map(w => w.Top));
+    const right = Math.max(...words.map(w => w.Left + w.Width));
+    const bottom = Math.max(...words.map(w => w.Top + w.Height));
+
+    return {
+      text,
+      words,
+      left, top, right, bottom,
+      width: right - left,
+      height: bottom - top,
+      centerX: (left + right) / 2,
+      centerY: (top + bottom) / 2
+    };
+  }).filter(Boolean);
 }
 
-// Mencari koordinat baris yang berisi judul label VIN
-function findVinLabel(lines) {
-  const targetLabels = [
-    "VEHICLE IDENTIFICATION NUMBER", 
-    "VEHICLE IDENTIFICATION NO", 
-    "VEHICLE IDENTIFICATION",
-    "IDENTIFICATION NUMBER"
-  ];
-  
-  let bestLabel = null;
-  let bestScore = 0;
-
-  for (let line of lines) {
-    let cleanText = line.LineText.toUpperCase().replace(/[^A-Z]/g, '');
+// STEP 2 & 3 & 12: FUZZY LABEL MATCHING & FALLBACK
+function findVinLabel(normLines) {
+  // Pass 1: Coba cari di baris tunggal (Toleransi OCR tinggi)
+  for (let line of normLines) {
+    let clean = line.text.toUpperCase().replace(/[^A-Z0-9]/g, '');
     
-    for (let target of targetLabels) {
-      let cleanTarget = target.replace(/[^A-Z]/g, '');
+    if (
+      clean.includes("VEHICLEIDENTIFICATION") || 
+      clean.includes("IDENTIFICATIONNUMBER") ||
+      clean.includes("1DENTIFICAT1ON") ||
+      clean.includes("IDENTIFICATIONNO") ||
+      (clean.includes("VEHICLE") && clean.includes("IDENT"))
+    ) {
+      console.debug("✅ VIN LABEL FOUND (Single Line):", line.text);
+      return line;
+    }
+  }
+
+  // Pass 2: Fallback (Label terpecah ke beberapa baris/Words berdekatan)
+  let vehicleLine = null;
+  let identLine = null;
+
+  for (let line of normLines) {
+    let clean = line.text.toUpperCase();
+    if (clean.includes("VEHICLE")) vehicleLine = line;
+    if (clean.includes("IDENTIFICATION") || clean.includes("1DENTIFICAT1ON")) identLine = line;
+  }
+
+  if (vehicleLine && identLine) {
+    // Jika jarak vertikal mereka dekat (terpecah 2 baris)
+    let gap = Math.abs(vehicleLine.bottom - identLine.top);
+    if (gap < 50) {
+      console.debug("✅ VIN LABEL FOUND (Multi-Line Merged):", vehicleLine.text, "+", identLine.text);
+      // STEP 4: Buat Bounding Box Gabungan
+      return {
+        left: Math.min(vehicleLine.left, identLine.left),
+        top: Math.min(vehicleLine.top, identLine.top),
+        right: Math.max(vehicleLine.right, identLine.right),
+        bottom: Math.max(vehicleLine.bottom, identLine.bottom),
+        width: Math.max(vehicleLine.right, identLine.right) - Math.min(vehicleLine.left, identLine.left),
+        height: Math.max(vehicleLine.bottom, identLine.bottom) - Math.min(vehicleLine.top, identLine.top),
+        centerX: (vehicleLine.centerX + identLine.centerX) / 2
+      };
+    }
+  }
+
+  console.debug("❌ LABEL VIN TIDAK DITEMUKAN");
+  return null;
+}
+
+// STEP 5: MENCARI KANDIDAT GEOMETRIS DI BAWAH LABEL (Bukan seluruh dokumen)
+function findVinCandidates(normLines, labelBox) {
+  let candidates = [];
+  
+  for (let i = 0; i < normLines.length; i++) {
+    let line = normLines[i];
+    
+    // Harus berada di bawah label (toleransi -15px jika miring)
+    let verticalGap = line.top - labelBox.bottom;
+    
+    // Jangan terlalu jauh (Max 150px atau 8x tinggi label)
+    if (verticalGap >= -15 && verticalGap <= Math.max(150, labelBox.height * 8)) {
       
-      // Deteksi: Apakah string target ada di dalam line ini, atau similarity-nya tinggi
-      if (cleanText.includes(cleanTarget) || calculateSimilarity(cleanText, cleanTarget) > 0.75) {
-        // Line ini adalah Label "VEHICLE IDENTIFICATION NUMBER"
-        bestLabel = line;
-        bestScore = 1; 
-        break; 
+      // Horizontal Overlap / Kedekatan X
+      let hOverlap = Math.max(0, Math.min(line.right, labelBox.right) - Math.max(line.left, labelBox.left));
+      
+      if (hOverlap > 0 || (line.centerX >= labelBox.left - 50 && line.centerX <= labelBox.right + 50)) {
+        
+        // STEP 6: Kumpulkan String (Line Utuh, Gabungan Words, Gabungan Lines)
+        
+        // A. Baris utuh (tanpa spasi)
+        let lineClean = line.text.replace(/\s+/g, '');
+        if (lineClean.length >= 10) candidates.push(lineClean);
+
+        // B. Word individu
+        line.words.forEach(w => {
+          if (w.WordText && w.WordText.length >= 10) candidates.push(w.WordText);
+        });
+
+        // C. Gabungan dengan baris berikutnya (Jika OCR memecah VIN MHKP3... dan 201519 ke atas bawah)
+        if (i < normLines.length - 1) {
+          let nextLine = normLines[i+1];
+          let lineGap = nextLine.top - line.bottom;
+          if (lineGap < 30) {
+             let merged = (line.text + nextLine.text).replace(/\s+/g, '');
+             if (merged.length >= 10) candidates.push(merged);
+          }
+        }
       }
     }
-    if (bestScore === 1) break;
   }
-  return bestLabel;
-}
-
-// Mencari baris yang secara geometri berada tepat di bawah label
-function findValueNearLabel(lines, labelBox) {
-  let bestCandidate = null;
-  let minDistance = Infinity;
   
-  const labelBottomY = labelBox.MinTop + labelBox.MaxHeight;
-  const labelCenterX = labelBox.MinLeft + (labelBox.MaxWidth / 2);
-
-  for (let line of lines) {
-    // Skip dirinya sendiri
-    if (line === labelBox) continue;
-
-    // 1. Cek Posisi Vertikal (Harus berada di bawah label, tapi tidak lebih jauh dari tinggi 4 baris)
-    const distanceY = line.MinTop - labelBottomY;
-    if (distanceY < -10 || distanceY > (labelBox.MaxHeight * 4)) continue;
-
-    // 2. Cek Posisi Horizontal (Tengahnya harus sejajar / berada di area kotak label)
-    const lineCenterX = line.MinLeft + (line.MaxWidth / 2);
-    const distanceX = Math.abs(lineCenterX - labelCenterX);
-    
-    // Syarat 1: Harus di bawah. Syarat 2: Jarak horizontal tidak terlalu melenceng
-    if (distanceX < (labelBox.MaxWidth * 0.8)) {
-      // Kandidat ini masuk akal. Cari yang paling dekat secara vertikal.
-      if (distanceY < minDistance) {
-        minDistance = distanceY;
-        bestCandidate = line;
-      }
-    }
-  }
-
-  return bestCandidate;
+  // Buang duplikat
+  let uniqueCandidates = [...new Set(candidates)];
+  console.debug("🔍 GEOMETRIC CANDIDATES FOUND:", uniqueCandidates);
+  return uniqueCandidates;
 }
 
 
-/* ====================================================================
-   2. CANDIDATE GENERATION & VALIDATION
-==================================================================== */
+// STEP 7 & 8: SCORING & CHARACTER CONFUSION CORRECTION
 const CONFUSION_MAP = {
   'S': ['3', '5'], '5': ['S', '3'], '3': ['S', '5'],
   'B': ['8'], '8': ['B'], 'Z': ['2'], '2': ['Z'],
@@ -255,63 +305,91 @@ const CONFUSION_MAP = {
   'I': ['1'], 'L': ['1'], '!': ['1'], '|': ['1']
 };
 
-function scoreVinCandidate(vin, isMutated = false) {
+function scoreCandidate(vin, isMutated) {
   let score = 0;
-  if (vin.length === 17) score += 30;
-  if (!/[IOQ]/.test(vin)) score += 10;
-  else score -= 30; 
-
+  
+  if (vin.length === 17) score += 100;
+  
+  // Validasi MasterNik
   const prefix = vin.substring(0, 9);
-  if (masterNik[prefix]) score += 50; 
-  else if (vin.startsWith('MHK') || vin.startsWith('PM2')) score += 20; 
+  if (masterNik[prefix]) score += 100; 
+  
+  if (vin.startsWith('MHK') || vin.startsWith('PM2')) score += 30;
+  
+  if (!/[IOQ]/.test(vin)) score += 20;
 
-  if (vin.length >= 5 && /[0-9]/.test(vin[4])) score += 15;
-  if (isMutated) score -= 5;
+  // Rasio Alphanumeric (Mencegah teks sampah terpilih)
+  let alphaNumRatio = vin.replace(/[^A-Z0-9]/g, '').length / (vin.length || 1);
+  if (alphaNumRatio > 0.9) score += 20;
 
+  // Pola VDS Daihatsu (Karakter ke-5 adalah Angka, mengatasi 'S')
+  if (vin.length >= 5 && /[0-9]/.test(vin[4])) score += 20;
+
+  if (isMutated) score -= 10; // Penalti kecil agar OCR asli menang jika skor seri
   return score;
 }
 
-function processVinExtraction(rawObservation) {
-  let baseStr = rawObservation.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (baseStr.length > 17 && (baseStr.startsWith('MHK') || baseStr.startsWith('PM2'))) {
-    baseStr = baseStr.substring(0, 17);
+function processCandidateMutations(candidateString) {
+  let cleanStr = candidateString.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  
+  // Jika terlalu panjang tapi depannya valid, potong.
+  if (cleanStr.length > 17 && (cleanStr.startsWith('MHK') || cleanStr.startsWith('PM2'))) {
+    cleanStr = cleanStr.substring(0, 17);
   }
 
-  let candidates = [];
-  candidates.push({ text: baseStr, score: scoreVinCandidate(baseStr, false) });
+  let results = [];
+  // 1. Masukkan data asli
+  results.push({ text: cleanStr, score: scoreCandidate(cleanStr, false) });
 
-  // Mutasi
-  let chars = baseStr.split('');
-  let mutationCount = 0;
+  // 2. Buat mutasi (hanya koreksi karakter jika diperlukan)
+  let chars = cleanStr.split('');
+  let mutCount = 0;
   for (let i = 0; i < chars.length; i++) {
-    if (mutationCount > 2) break; 
-    let char = chars[i];
-    if (CONFUSION_MAP[char]) {
-      CONFUSION_MAP[char].forEach(altChar => {
-        let mutatedArr = [...chars];
-        mutatedArr[i] = altChar;
-        let mutatedStr = mutatedArr.join('');
-        candidates.push({ text: mutatedStr, score: scoreVinCandidate(mutatedStr, true) });
+    if (mutCount > 2) break; // Batasi mutasi agar tidak loop berlebihan
+    if (CONFUSION_MAP[chars[i]]) {
+      CONFUSION_MAP[chars[i]].forEach(alt => {
+        let mutArr = [...chars];
+        mutArr[i] = alt;
+        let mutStr = mutArr.join('');
+        results.push({ text: mutStr, score: scoreCandidate(mutStr, true) });
       });
-      mutationCount++;
+      mutCount++;
     }
   }
 
-  candidates.sort((a, b) => b.score - a.score);
-  return candidates[0]; // Kembalikan skor mutasi tertinggi untuk observation ini
+  return results;
 }
 
-
 /* ====================================================================
-   3. API EXECUTION
+   IMAGE FETCH & MAIN PIPELINE
 ==================================================================== */
+
+// Resize gambar utuh, jangan di-crop
+function getResizedVariant(imgElement) {
+  const canvas = document.createElement('canvas');
+  const MAX_WIDTH = 1200;
+  let width = imgElement.width;
+  let height = imgElement.height;
+  
+  if (width > MAX_WIDTH) {
+    height = height * (MAX_WIDTH / width);
+    width = MAX_WIDTH;
+  }
+  
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(imgElement, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', 0.8);
+}
+
 async function callOCRSensor(base64Image) {
   const formData = new FormData();
   formData.append("base64Image", base64Image);
-  formData.append("apikey", "helloworld");
+  formData.append("apikey", "helloworld"); // Disarankan pindah ke backend nanti
   formData.append("OCREngine", "2"); 
   formData.append("scale", "true");
-  // isOverlayRequired akan mengembalikan koordinat geometris Bounding Box per baris
+  // CRITICAL: Request Words and Coordinates
   formData.append("isOverlayRequired", "true"); 
 
   try {
@@ -323,89 +401,76 @@ async function callOCRSensor(base64Image) {
   }
 }
 
-
-/* ====================================================================
-   4. MAIN PIPELINE (GEOMETRY ASSOCIATION)
-==================================================================== */
 const executeGeometricPipeline = (event) => {
   const file = event.target.files[0];
   if (!file) return;
 
   isProcessing.value = true;
   pipelineError.value = false;
-  pipelineStatus.value = "Memuat Gambar...";
+  pipelineStatus.value = "1. Memuat Gambar...";
+
+  console.debug("--- STARTING OCR PIPELINE ---");
 
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
     img.onload = async () => {
       try {
-        pipelineStatus.value = "Preprocessing...";
-        
-        // Resize utuh tanpa crop
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1200;
-        let width = img.width;
-        let height = img.height;
-        if (width > MAX_WIDTH) {
-          height = height * (MAX_WIDTH / width);
-          width = MAX_WIDTH;
-        }
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        // Grayscale filter
-        const imgData = ctx.getImageData(0, 0, width, height);
-        for (let i = 0; i < imgData.data.length; i += 4) {
-          let avg = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
-          imgData.data[i] = avg; imgData.data[i+1] = avg; imgData.data[i+2] = avg;
-        }
-        ctx.putImageData(imgData, 0, 0);
-        const b64 = canvas.toDataURL('image/jpeg', 0.8);
-
-        pipelineStatus.value = "Memanggil OCR dengan Bounding Box...";
+        pipelineStatus.value = "2. Menghubungi Sensor OCR...";
+        const b64 = getResizedVariant(img);
         const resultJSON = await callOCRSensor(b64);
         
         if (!resultJSON || !resultJSON.ParsedResults || resultJSON.ParsedResults.length === 0) {
-          throw new Error("Gagal membaca teks.");
+          throw new Error("Gagal membaca teks dari gambar.");
         }
 
-        const lines = resultJSON.ParsedResults[0].TextOverlay?.Lines;
-        if (!lines || lines.length === 0) {
+        const rawLines = resultJSON.ParsedResults[0].TextOverlay?.Lines;
+        if (!rawLines || rawLines.length === 0) {
            pipelineError.value = true;
-           alert("Sistem OCR tidak dapat memetakan posisi teks. Silakan coba lagi.");
+           alert("Sistem OCR tidak mengembalikan koordinat garis/kata. Silakan coba lagi.");
            return;
         }
 
-        pipelineStatus.value = "Mencari Label VIN...";
-        const labelBox = findVinLabel(lines);
+        pipelineStatus.value = "3. Normalisasi Koordinat...";
+        const normLines = normalizeOCRLines(rawLines);
+        console.debug("NORMALIZED LINES:", normLines);
+
+        pipelineStatus.value = "4. Mencari Field 'VIN'...";
+        const labelBox = findVinLabel(normLines);
 
         if (!labelBox) {
-           // Field Identification Gagal
            pipelineError.value = true;
-           alert("Label 'VEHICLE IDENTIFICATION NUMBER' tidak ditemukan. Pastikan area label terfoto dengan jelas.");
+           alert("Label 'VEHICLE IDENTIFICATION NUMBER' tidak ditemukan. Pastikan area label terfoto dengan jelas, bukan hanya angkanya.");
+           return;
+        }
+        console.debug("VIN LABEL BOUNDING BOX:", labelBox);
+
+        pipelineStatus.value = "5. Mengekstrak Geometri Area VIN...";
+        const candidateStrings = findVinCandidates(normLines, labelBox);
+
+        if (candidateStrings.length === 0) {
+           pipelineError.value = true;
+           alert("Label VIN ditemukan, tetapi area nilainya kosong. Silakan foto ulang.");
            return;
         }
 
-        pipelineStatus.value = "Mengekstrak Nilai di Bawah Label...";
-        const valueBox = findValueNearLabel(lines, labelBox);
+        pipelineStatus.value = "6. Validasi & Character Correction...";
+        let scoredCandidates = [];
+        candidateStrings.forEach(str => {
+           scoredCandidates = scoredCandidates.concat(processCandidateMutations(str));
+        });
 
-        if (!valueBox) {
-           pipelineError.value = true;
-           alert("Label VIN ditemukan, tetapi nilainya terpotong atau kosong. Silakan foto ulang.");
-           return;
-        }
+        scoredCandidates.sort((a, b) => b.score - a.score);
+        console.debug("SCORED CANDIDATES:", scoredCandidates);
 
-        pipelineStatus.value = "Validasi dan Character Correction...";
-        const rawVinObservation = valueBox.LineText;
-        const bestCandidate = processVinExtraction(rawVinObservation);
+        const bestCandidate = scoredCandidates[0];
+        console.debug("SELECTED VIN:", bestCandidate);
 
-        // KEPUTUSAN FINAL
-        if (bestCandidate.score >= 50) {
+        // DECISION THRESHOLD
+        if (bestCandidate.score >= 120) { // Skor 120 berarti (100 length + 20 No IOQ) min
           form.no_rangka = bestCandidate.text;
           
-          // Tebak warna dari seluruh teks dokumen
+          // Deteksi warna dokumen
           const rawAll = resultJSON.ParsedResults[0].ParsedText.toUpperCase();
           for (let w of options.warna) {
             if (rawAll.includes(w)) { form.warna = w; break; }
@@ -413,16 +478,18 @@ const executeGeometricPipeline = (event) => {
           try { navigator.vibrate([100, 50, 100]); } catch(v){}
         } else {
           pipelineError.value = true;
-          alert(`VIN terdeteksi: ${bestCandidate.text}\nConfidence rendah. Silakan periksa kembali atau foto ulang.`);
+          alert(`VIN terdeteksi: ${bestCandidate.text}\nConfidence Skor (${bestCandidate.score}) terlalu rendah. Silakan periksa kembali atau foto ulang.`);
         }
 
       } catch (err) {
         pipelineError.value = true;
         alert("Pipeline error atau koneksi terputus.");
+        console.error(err);
       } finally {
         isProcessing.value = false;
         pipelineStatus.value = "";
         event.target.value = ""; 
+        console.debug("--- END OCR PIPELINE ---");
       }
     };
     img.src = e.target.result;
