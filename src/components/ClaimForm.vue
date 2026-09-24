@@ -5,34 +5,50 @@
       <input type="date" v-model="form.tanggal" required class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs" />
     </div>
 
-    <!-- No Rangka + Input File iOS Asli -->
+    <!-- No Rangka + Dual Tombol Kamera (Normal & Sniper BA1/P3) -->
     <div class="space-y-1.5">
       <div class="flex justify-between items-center" v-show="!sniperMode">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">No Rangka (VIN) *</label>
       </div>
 
-      <!-- Tombol Pemanggil Kamera Asli (Aman untuk iPhone) -->
-      <div class="space-y-2" v-show="!sniperMode">
-        <input type="file" id="cameraInput" accept="image/*" capture="environment" @change="handleNativeCamera" class="hidden" :disabled="isProcessing" />
-
-        <label for="cameraInput" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-lg cursor-pointer hover:bg-slate-800 transition border-2 border-blue-500">
-          <div class="flex flex-col items-center">
-            <svg class="w-8 h-8 text-blue-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <!-- DUAL TOMBOL PILIHAN KAMERA -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" v-show="!sniperMode">
+        <!-- Tombol 1: Scan Otomatis Normal -->
+        <div class="relative">
+          <input type="file" id="normalCameraInput" accept="image/*" capture="environment" @change="handleAutomaticScan" class="hidden" :disabled="isProcessing" />
+          <label
+            for="normalCameraInput"
+            class="w-full bg-slate-900 text-white font-bold py-3 px-3 rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer hover:bg-slate-800 transition border border-slate-700 text-xs text-center"
+          >
+            <svg class="w-5 h-5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 stroke-width="2"
                 d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
               />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span class="text-sm">Buka Kamera (Scan Normal / BA1 / P3)</span>
-            <span class="text-[10px] text-blue-300 font-normal">Mendukung Mode Sniper Khusus Label Cacat Cetak</span>
-          </div>
-        </label>
+            <span>Scan Otomatis (Normal)</span>
+          </label>
+        </div>
+
+        <!-- Tombol 2: Mode Sniper Khusus BA1 / P3 -->
+        <div class="relative">
+          <input type="file" id="sniperCameraInput" accept="image/*" capture="environment" @change="handleNativeCamera" class="hidden" :disabled="isProcessing" />
+          <label
+            for="sniperCameraInput"
+            class="w-full bg-amber-600 text-white font-bold py-3 px-3 rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer hover:bg-amber-700 transition border border-amber-500 text-xs text-center"
+          >
+            <svg class="w-5 h-5 text-amber-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            <span>🎯 Mode Sniper BA1 / P3</span>
+          </label>
+        </div>
       </div>
 
-      <!-- UI SNIPER MODE KHUSUS BA1 / P3 -->
+      <!-- UI SNIPER CANVAS MODE -->
       <div v-show="sniperMode" class="bg-slate-900 rounded-2xl p-3 border-2 border-amber-500 shadow-xl space-y-3 relative">
         <div class="bg-amber-500 text-slate-950 text-xs font-extrabold py-2 px-3 rounded-lg text-center shadow-md animate-pulse">🎯 MODE SNIPER AKTIF: Sentuh tepat di tengah tulisan (MHKP3 / MHKBA1) untuk menembus tinta!</div>
 
@@ -320,7 +336,12 @@ watch(
   }
 );
 
-// AMBIL FOTO DARI KAMERA iPHONE
+// 1. SCANNER OTOMATIS (UNTUK LABEL NORMAL) MENGGUNAKAN ENGINE 2
+const handleAutomaticScan = (event) => {
+  processImageWithOCR(event, "2", false);
+};
+
+// 2. TRIGGER MODE SNIPER (UNTUK LABEL BA1 / P3)
 const handleNativeCamera = (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -330,7 +351,6 @@ const handleNativeCamera = (event) => {
     const img = new Image();
     img.onload = () => {
       sniperMode.value = true;
-
       setTimeout(() => {
         const canvas = photoCanvas.value;
         if (!canvas) return;
@@ -356,80 +376,139 @@ const handleNativeCamera = (event) => {
   event.target.value = "";
 };
 
-// MODE SNIPER MENGGUNAKAN OCR ENGINE 2 (Ketepatan Tinggi pada Teks Terisolasi)
-const handleCanvasClick = async (event) => {
-  if (isProcessing.value) return;
+// 3. PROSES UTAMA OCR API
+const processImageWithOCR = async (event, engineVersion, isCropped, customBase64 = null) => {
   isProcessing.value = true;
 
-  try {
-    const canvas = photoCanvas.value;
-    const rect = canvas.getBoundingClientRect();
-
-    const scaleY = canvas.height / rect.height;
-    const clickY = (event.clientY - rect.top) * scaleY;
-
-    // Potong area setinggi 10% di sekitar titik sentuh jari Anda
-    const cropHeight = canvas.height * 0.1;
-    let startY = clickY - cropHeight / 2;
-    if (startY < 0) startY = 0;
-    if (startY + cropHeight > canvas.height) startY = canvas.height - cropHeight;
-
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = canvas.width;
-    tempCanvas.height = cropHeight;
-    const ctx = tempCanvas.getContext("2d");
-
-    ctx.drawImage(canvas, 0, startY, canvas.width, cropHeight, 0, 0, tempCanvas.width, tempCanvas.height);
-
-    const base64Crop = tempCanvas.toDataURL("image/jpeg", 1.0);
-
-    // KIRIM KE OCR SPACE MENGGUNAKAN ENGINE 2
+  const executeOCR = async (base64Img) => {
     const formData = new FormData();
-    formData.append("base64Image", base64Crop);
+    formData.append("base64Image", base64Img);
     formData.append("apikey", "helloworld");
-    formData.append("OCREngine", "2"); // Engine 2 jauh lebih presisi untuk hasil crop ketat
+    formData.append("OCREngine", engineVersion);
     formData.append("scale", "true");
+    if (!isCropped) formData.append("isTable", "true");
 
-    const response = await fetch("https://api.ocr.space/parse/image", {
-      method: "POST",
-      body: formData,
-    });
+    try {
+      const response = await fetch("https://api.ocr.space/parse/image", {
+        method: "POST",
+        body: formData,
+      });
 
-    const result = await response.json();
+      const result = await response.json();
 
-    if (result && result.ParsedResults && result.ParsedResults.length > 0) {
-      let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
+      if (result && result.ParsedResults && result.ParsedResults.length > 0) {
+        let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
 
-      let cleanText = rawText.replace(/I/g, "1").replace(/L/g, "1").replace(/\|/g, "1").replace(/!/g, "1").replace(/O/g, "0").replace(/Q/g, "0").replace(/D/g, "0");
-      cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
+        // Deteksi Warna (Hanya untuk scan otomatis normal)
+        if (!isCropped) {
+          let detectedColor = "";
+          for (let w of options.warna) {
+            if (rawText.includes(w)) {
+              detectedColor = w;
+              break;
+            }
+          }
+          if (!detectedColor) {
+            if (rawText.includes("WH1TE") || rawText.includes("WHTE")) detectedColor = "WHITE";
+            if (rawText.includes("S1LVER") || rawText.includes("SLVER")) detectedColor = "SILVER";
+            if (rawText.includes("8LACK") || rawText.includes("BLCK")) detectedColor = "BLACK";
+            if (rawText.includes("6REY") || rawText.includes("GPEY")) detectedColor = "GREY";
+          }
+          if (detectedColor) form.warna = detectedColor;
+        }
 
-      let mhkIndex = cleanText.indexOf("MHK");
-      if (mhkIndex === -1) mhkIndex = cleanText.indexOf("PM2");
+        let cleanText = rawText.replace(/I/g, "1").replace(/L/g, "1").replace(/\|/g, "1").replace(/!/g, "1").replace(/O/g, "0").replace(/Q/g, "0").replace(/D/g, "0");
+        cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
 
-      if (mhkIndex !== -1 && cleanText.length >= mhkIndex + 17) {
-        let finalVin = cleanText.substring(mhkIndex, mhkIndex + 17);
+        let mhkIndex = cleanText.indexOf("MHK");
+        if (mhkIndex === -1) mhkIndex = cleanText.indexOf("PM2");
 
-        // Koreksi khusus pola P3 / BA1
-        finalVin = finalVin.replace("8A1", "BA1");
-        finalVin = finalVin.replace("B41", "BA1");
-        finalVin = finalVin.replace("P38A1", "P3BA1");
+        if (mhkIndex !== -1 && cleanText.length >= mhkIndex + 17) {
+          let finalVin = cleanText.substring(mhkIndex, mhkIndex + 17);
 
-        form.no_rangka = finalVin;
-        sniperMode.value = false;
-        try {
-          navigator.vibrate(200);
-        } catch (e) {}
+          finalVin = finalVin.replace("8A1", "BA1");
+          finalVin = finalVin.replace("B41", "BA1");
+          finalVin = finalVin.replace("P38A1", "P3BA1");
+
+          form.no_rangka = finalVin;
+          sniperMode.value = false;
+          try {
+            navigator.vibrate(200);
+          } catch (e) {}
+        } else {
+          if (isCropped) {
+            alert("Kurang pas. Sentuh TEPAT di tengah-tengah tulisan MHKP3 / MHKBA1.");
+          } else {
+            alert("Gagal membaca VIN otomatis. Silakan gunakan tombol 🎯 Mode Sniper khusus BA1/P3.");
+          }
+        }
       } else {
-        alert("Kurang pas. Silakan sentuh TEPAT di tengah-tengah teks MHKP3...");
+        alert("Gagal membaca foto. Pastikan gambar jelas.");
       }
-    } else {
-      alert("Gagal membaca area tersebut. Coba sentuh sekali lagi dengan lebih presisi.");
+    } catch (err) {
+      alert("Gagal menghubungi server OCR. Periksa koneksi.");
+    } finally {
+      isProcessing.value = false;
+      if (event && event.target) event.target.value = "";
     }
-  } catch (err) {
-    alert("Koneksi gagal. Periksa jaringan internet Anda.");
-  } finally {
-    isProcessing.value = false;
+  };
+
+  if (customBase64) {
+    await executeOCR(customBase64);
+  } else {
+    const file = event.target.files[0];
+    if (!file) {
+      isProcessing.value = false;
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement("canvas");
+        const MAX_WIDTH = 1200;
+        let width = img.width;
+        let height = img.height;
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        await executeOCR(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
   }
+};
+
+// 4. SAAT KLIK KANVAS DI MODE SNIPER
+const handleCanvasClick = async (event) => {
+  if (isProcessing.value) return;
+
+  const canvas = photoCanvas.value;
+  const rect = canvas.getBoundingClientRect();
+  const scaleY = canvas.height / rect.height;
+  const clickY = (event.clientY - rect.top) * scaleY;
+
+  const cropHeight = canvas.height * 0.1;
+  let startY = clickY - cropHeight / 2;
+  if (startY < 0) startY = 0;
+  if (startY + cropHeight > canvas.height) startY = canvas.height - cropHeight;
+
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = canvas.width;
+  tempCanvas.height = cropHeight;
+  const ctx = tempCanvas.getContext("2d");
+
+  ctx.drawImage(canvas, 0, startY, canvas.width, cropHeight, 0, 0, tempCanvas.width, tempCanvas.height);
+  const base64Crop = tempCanvas.toDataURL("image/jpeg", 1.0);
+
+  // Proses potongan dengan OCR Engine 2
+  await processImageWithOCR(null, "2", true, base64Crop);
 };
 
 const cancelSniper = () => {
