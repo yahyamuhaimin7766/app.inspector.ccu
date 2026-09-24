@@ -260,7 +260,7 @@ const masterNik = {
   MHKAB1AC8: "NEW AYLA R",
   MHKAB1AC9: "NEW AYLA R",
   MHKAB1ACX: "NEW AYLA R",
-  MHKP3BA1JTK: "PICK UP 1.3",
+  MHKP3BA1J: "PICK UP 1.3",
 };
 
 const getTodayDate = () => new Date().toISOString().split("T")[0];
