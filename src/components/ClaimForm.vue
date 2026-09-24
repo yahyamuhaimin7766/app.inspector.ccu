@@ -5,14 +5,14 @@
       <input type="date" v-model="form.tanggal" required class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs" />
     </div>
 
-    <!-- No Rangka + Tombol Kamera -->
+    <!-- No Rangka + Kamera Hybrid OCR -->
     <div class="space-y-1.5">
       <div class="flex justify-between items-center">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">No Rangka (VIN) *</label>
       </div>
 
       <div class="relative w-full mb-2">
-        <input type="file" id="cameraInput" accept="image/*" capture="environment" @change="handleAdvancedOCR" class="hidden" :disabled="isProcessing" />
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" @change="executeOCRPipeline" class="hidden" :disabled="isProcessing" />
 
         <label
           for="cameraInput"
@@ -29,16 +29,16 @@
               />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span class="text-sm">Buka Kamera HP (Smart OCR)</span>
-            <span class="text-[10px] text-slate-400 font-normal">Tesseract v5 Pipeline</span>
+            <span class="text-sm">Buka Kamera (Robust OCR Pipeline)</span>
+            <span class="text-[10px] text-slate-400 font-normal">Multi-Observation & Candidate Scoring</span>
           </div>
 
           <div v-else class="flex flex-col items-center gap-2">
             <div class="flex items-center gap-3">
               <span class="w-6 h-6 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
-              <span>Memproses...</span>
+              <span>Pipeline Berjalan...</span>
             </div>
-            <span class="text-[10px] text-blue-300 font-mono">{{ ocrStatus }}</span>
+            <span class="text-[10px] text-blue-300 font-mono">{{ pipelineStatus }}</span>
           </div>
         </label>
       </div>
@@ -47,7 +47,7 @@
         <input
           type="text"
           v-model="form.no_rangka"
-          placeholder="Scan VIN atau ketik manual..."
+          placeholder="Hasil OCR akan masuk di sini..."
           required
           class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs font-mono tracking-wide font-bold"
         />
@@ -60,7 +60,7 @@
       <input
         type="text"
         v-model="form.tipe"
-        placeholder="Ketik tipe kendaraan..."
+        placeholder="Tipe kendaraan (Auto/Manual)..."
         required
         class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs font-bold"
         :class="{ 'text-indigo-800 bg-indigo-50 border-indigo-300': form.tipe }"
@@ -127,7 +127,6 @@
       ></textarea>
     </div>
 
-    <!-- Bottom Actions -->
     <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 flex gap-3 max-w-xl mx-auto z-20 shadow-lg">
       <button type="button" @click="handleReset" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 rounded-xl transition">Batal</button>
       <button
@@ -144,7 +143,6 @@
 
 <script setup>
 import { reactive, ref, watch } from "vue";
-import { createWorker } from "tesseract.js";
 
 const props = defineProps({
   loading: Boolean,
@@ -170,54 +168,29 @@ const masterNik = {
   MHKG8FB2J: "TERIOS R",
   MHKV3BA3J: "MINIBUS 1.3 FH",
   MHKV3BA6J: "MINIBUS 1.3 FF FH",
-  MHKV3CA3J: "MINIBUS 1.5 PS FH",
   MHKW3CA1J: "LUXIO D",
   MHKW3CA3J: "LUXIO X",
   MHKW3CB3J: "LUXIO X",
   MHKB3BA1J: "BLINDVAN 1.3",
   MHKB3CA1J: "BLINDVAN 1.3",
   MHKS4DA1J: "AYLA D+",
-  MHKS4DA2J: "AYLA M",
   MHKS4DA3J: "AYLA X",
-  MHKS4DB2J: "AYLA M",
-  MHKS4DB3J: "AYLA X",
-  MHKS4GA4J: "AYLA X-1.2",
-  MHKS4GA5J: "AYLA R-1.2",
-  MHKS4GB4J: "AYLA X-1.2",
   MHKS4GB5J: "AYLA R-1.2",
   MHKS6DJ1J: "SIGRA D",
-  MHKS6DJ2J: "SIGRA M",
-  MHKS6GJ3J: "SIGRA X",
   MHKS6GJ6J: "SIGRA R",
-  MHKS6GK6J: "SIGRA R",
-  MHKS6GK3J: "SIGRA X",
   PM2M804S1: "SIRION STD",
-  MHKB3FA1J: "BLINDVAN 1.5",
   MHKP3BA1J: "PICK UP 1.3",
   MHKT3CA1J: "PICK UP 1.5 3W",
-  MHKT3BA1J: "PICK UP 1.3 3W",
-  MHKP3FA1J: "PICK UP 1.5 STD",
   MHKAA1AA1: "ROCKY R",
-  MHKAA1AA2: "ROCKY R",
   MHKAB1AA0: "ROCKY 1.2",
 };
 
 const getTodayDate = () => new Date().toISOString().split("T")[0];
-
-const getInitialForm = () => ({
-  tanggal: getTodayDate(),
-  no_rangka: "",
-  tipe: "",
-  warna: "",
-  km: "",
-  kode_accu: "",
-  defect: "",
-  ket_defect: "",
-});
-
+const getInitialForm = () => ({ tanggal: getTodayDate(), no_rangka: "", tipe: "", warna: "", km: "", kode_accu: "", defect: "", ket_defect: "" });
 const form = reactive(getInitialForm());
+
 const isProcessing = ref(false);
-const ocrStatus = ref("");
+const pipelineStatus = ref("");
 
 watch(
   () => props.editData,
@@ -254,233 +227,233 @@ watch(
 );
 
 // ==========================================
-// CANDIDATE GENERATION & VALIDATION
+// ROBUST VIN OCR ARCHITECTURE (AS REQUESTED)
 // ==========================================
 
-const VIN_PREFIXES = ["MHK", "PM2"];
-const CONFUSION_MAP = {
-  S: "3",
-  5: "3",
-  B: "8",
-  8: "B",
-  Z: "2",
-  G: "6",
-  I: "1",
-  O: "0",
-  Q: "0",
-  L: "1",
-  "!": "1",
-  "|": "1",
+const RobustVINPipeline = {
+  // 1. CHARACTER CONFUSION MAP (Noise handling)
+  confusionMap: {
+    S: ["3", "5"],
+    5: ["S", "3"],
+    3: ["S", "5"],
+    B: ["8"],
+    8: ["B"],
+    Z: ["2"],
+    2: ["Z"],
+    G: ["6"],
+    6: ["G"],
+    I: ["1"],
+    L: ["1"],
+    "!": ["1"],
+    "|": ["1"],
+    O: ["0"],
+    Q: ["0"],
+    D: ["0"],
+  },
+
+  // 2. CONFIDENCE SCORING ALGORITHM
+  scoreCandidate(vin, mutationCount) {
+    let score = 0;
+
+    // Format Validation: Must be 17 chars
+    if (vin.length === 17) score += 40;
+
+    // Format Validation: Valid Daihatsu WMI Prefix
+    const prefixes = ["MHK", "PM2"];
+    if (prefixes.some((p) => vin.startsWith(p))) score += 30;
+
+    // Format Validation: No illegal characters (I, O, Q)
+    if (!/[IOQ]/.test(vin)) score += 10;
+
+    // VDS Logical Validation (Specific for Daihatsu)
+    // Example: MHKP3... -> index 4 is '3'.
+    // In Daihatsu VINs, index 4 (5th char) is highly likely a number representing engine/body.
+    if (vin.length > 4) {
+      if (/[0-9]/.test(vin[4])) score += 20; // HUGE bonus if 5th char is a number (solves S -> 3)
+      if (/[A-Z]/.test(vin[4])) score -= 10; // Penalty if 5th char is a letter like 'S'
+    }
+
+    // Penalty for replacing characters (we favor original OCR if possible)
+    score -= mutationCount * 5;
+
+    return score;
+  },
+
+  // 3. CANDIDATE GENERATION
+  generateCandidates(ocrText) {
+    let cleanText = ocrText.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+    // Try to extract the block starting with MHK or PM2
+    let match = cleanText.match(/(MHK|PM2)[A-Z0-9]*/);
+    let baseString = match ? match[0] : cleanText.substring(0, 17);
+
+    let candidates = [];
+
+    // Candidate 1: The original unmodified string
+    candidates.push({
+      text: baseString,
+      score: this.scoreCandidate(baseString, 0),
+    });
+
+    // Generate Mutated Candidates based on Confusion Map
+    let chars = baseString.split("");
+    for (let i = 0; i < chars.length; i++) {
+      let char = chars[i];
+      if (this.confusionMap[char]) {
+        this.confusionMap[char].forEach((replacement) => {
+          let mutated = [...chars];
+          mutated[i] = replacement;
+          let mutatedText = mutated.join("");
+
+          candidates.push({
+            text: mutatedText,
+            score: this.scoreCandidate(mutatedText, 1),
+          });
+        });
+      }
+    }
+    return candidates;
+  },
+
+  // 4. PIPELINE EXECUTION
+  resolveBestVIN(observations) {
+    let allCandidates = [];
+    observations.forEach((obs) => {
+      if (obs) {
+        let candidates = this.generateCandidates(obs);
+        allCandidates = allCandidates.concat(candidates);
+      }
+    });
+
+    // Sort by Highest Confidence Score
+    allCandidates.sort((a, b) => b.score - a.score);
+
+    return allCandidates.length > 0 ? allCandidates[0] : null;
+  },
 };
 
-function scoreVin(vin) {
-  let score = 0;
-  if (vin.length === 17) score += 50;
-  if (VIN_PREFIXES.some((p) => vin.startsWith(p))) score += 30;
-  // Periksa apakah VDS karakter ke-5 (index 4) adalah angka
-  if (vin.length > 5 && /[0-9]/.test(vin[4])) score += 20;
-  return score;
-}
+// ==========================================
+// IMAGE PREPROCESSING FOR iOS SAFARI
+// ==========================================
+function createPreprocessingVariants(imgElement) {
+  return new Promise((resolve) => {
+    // VARIANT 1: Original Normalized
+    const c1 = document.createElement("canvas");
+    c1.width = imgElement.width;
+    c1.height = imgElement.height;
+    const ctx1 = c1.getContext("2d");
+    ctx1.drawImage(imgElement, 0, 0);
+    const b64Original = c1.toDataURL("image/jpeg", 0.8);
 
-function processConfusion(rawText) {
-  // Membersihkan karakter aneh
-  let text = rawText.toUpperCase().replace(/[^A-Z0-9]/g, "");
-
-  // Mencari potongan VIN
-  let match = text.match(/(MHK|PM2)[A-Z0-9]{12,16}/);
-  let baseVin = match ? match[0] : text.substring(0, 17);
-
-  // Jika panjang masih kurang, pertahankan apa adanya (biarkan operator ngetik sisanya)
-  if (baseVin.length < 5) return baseVin;
-
-  let corrected = baseVin.split("");
-
-  // Rule 1: VIN dilarang pakai I, O, Q
-  for (let i = 0; i < corrected.length; i++) {
-    if (corrected[i] === "I" || corrected[i] === "L") corrected[i] = "1";
-    if (corrected[i] === "O" || corrected[i] === "Q") corrected[i] = "0";
-  }
-
-  // Rule 2: Spesifik untuk masalah "MHKPS" -> harusnya "MHKP3"
-  // Karakter indeks 4 biasanya adalah angka 3 atau huruf terkait VDS
-  if (corrected.length > 4 && (corrected[4] === "S" || corrected[4] === "5")) {
-    corrected[4] = "3";
-  }
-
-  // Rule 3: Iterasi Confusion Map secara umum untuk indeks sisanya
-  for (let i = 5; i < corrected.length; i++) {
-    let char = corrected[i];
-    if (CONFUSION_MAP[char]) {
-      corrected[i] = CONFUSION_MAP[char];
-    }
-  }
-
-  return corrected.join("");
-}
-
-function getCanvasVariant(img, type) {
-  const canvas = document.createElement("canvas");
-  // Crop area lebih lebar (95%) untuk antisipasi label tidak pas tengah
-  const cWidth = img.width * 0.95;
-  const cHeight = img.height * 0.4;
-  canvas.width = cWidth;
-  canvas.height = cHeight;
-
-  const ctx = canvas.getContext("2d");
-  const startX = (img.width - cWidth) / 2;
-  const startY = (img.height - cHeight) / 2;
-
-  ctx.drawImage(img, startX, startY, cWidth, cHeight, 0, 0, cWidth, cHeight);
-
-  const imageData = ctx.getImageData(0, 0, cWidth, cHeight);
-  const data = imageData.data;
-
-  if (type === "high-contrast") {
+    // VARIANT 2: High Contrast / Thresholding (Solves faint prints)
+    const c2 = document.createElement("canvas");
+    c2.width = imgElement.width;
+    c2.height = imgElement.height;
+    const ctx2 = c2.getContext("2d");
+    ctx2.drawImage(imgElement, 0, 0);
+    const imgData = ctx2.getImageData(0, 0, c2.width, c2.height);
+    const data = imgData.data;
     for (let i = 0; i < data.length; i += 4) {
       let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      avg = avg < 128 ? avg * 0.5 : avg * 1.5; // Ekstrem contrast
-      if (avg > 255) avg = 255;
+      avg = avg < 140 ? 0 : 255; // Hard Otsu-style binarization
       data[i] = avg;
       data[i + 1] = avg;
       data[i + 2] = avg;
     }
-  } else if (type === "otsu") {
-    for (let i = 0; i < data.length; i += 4) {
-      let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      avg = avg > 110 ? 255 : 0;
-      data[i] = avg;
-      data[i + 1] = avg;
-      data[i + 2] = avg;
-    }
-  }
-  ctx.putImageData(imageData, 0, 0);
-  return canvas.toDataURL("image/jpeg", 1.0);
+    ctx2.putImageData(imgData, 0, 0);
+    const b64Contrast = c2.toDataURL("image/jpeg", 0.8);
+
+    resolve([b64Original, b64Contrast]);
+  });
 }
 
-// MAIN CAMERA HANDLER
-const handleAdvancedOCR = (event) => {
+// ==========================================
+// SENSOR EXECUTION (API CALLS)
+// ==========================================
+async function callOCRSensor(base64Image, isTableValue) {
+  const formData = new FormData();
+  formData.append("base64Image", base64Image);
+  formData.append("apikey", "helloworld");
+  formData.append("OCREngine", "2");
+  formData.append("scale", "true");
+  formData.append("isTable", isTableValue); // Different config
+
+  const response = await fetch("https://api.ocr.space/parse/image", { method: "POST", body: formData });
+  const result = await response.json();
+  if (result && result.ParsedResults && result.ParsedResults.length > 0) {
+    return result.ParsedResults[0].ParsedText;
+  }
+  return null;
+}
+
+const executeOCRPipeline = (event) => {
   const file = event.target.files[0];
   if (!file) return;
 
   isProcessing.value = true;
-  ocrStatus.value = "Menyiapkan Gambar...";
+  pipelineStatus.value = "1. Image Capture...";
 
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
     img.onload = async () => {
       try {
-        const MAX_WIDTH = 1200;
+        // Limit Resolution
+        const MAX_WIDTH = 1000;
         if (img.width > MAX_WIDTH) {
-          const ratio = MAX_WIDTH / img.width;
+          img.height = img.height * (MAX_WIDTH / img.width);
           img.width = MAX_WIDTH;
-          img.height = img.height * ratio;
         }
 
-        ocrStatus.value = "Membuat Image Variant...";
-        // Kita gunakan 2 varian untuk ketangguhan
-        const variants = [
-          img.src, // Gambar Asli
-          getCanvasVariant(img, "high-contrast"),
-          getCanvasVariant(img, "otsu"),
-        ];
+        pipelineStatus.value = "2. Preprocessing Variants...";
+        const variants = await createPreprocessingVariants(img);
 
-        ocrStatus.value = "Memulai Mesin OCR...";
+        pipelineStatus.value = "3. Multiple OCR Observations...";
+        // Request 1: Original Image, Line Mode
+        const req1 = callOCRSensor(variants[0], "false");
+        // Request 2: Thresholded Image, Table Mode
+        const req2 = callOCRSensor(variants[1], "true");
 
-        const worker = await createWorker("eng", 1, {
-          logger: (m) => {
-            if (m.status === "recognizing text") {
-              ocrStatus.value = `Membaca Teks: ${Math.round(m.progress * 100)}%`;
-            }
-          },
-        });
+        const observations = await Promise.all([req1, req2]);
 
-        // Mode 6: Assume a single uniform block of text. Sangat aman jika crop meleset.
-        await worker.setParameters({
-          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",
-          tessedit_pageseg_mode: "6",
-        });
+        pipelineStatus.value = "4. Candidate Gen & Scoring...";
+        const finalCandidate = RobustVINPipeline.resolveBestVIN(observations);
 
-        let bestResult = "";
-        let bestScore = -1;
+        if (finalCandidate && finalCandidate.score > 50) {
+          form.no_rangka = finalCandidate.text.substring(0, 17);
 
-        for (let i = 0; i < variants.length; i++) {
-          ocrStatus.value = `Menganalisa Varian ${i + 1}/${variants.length}...`;
-          const {
-            data: { text },
-          } = await worker.recognize(variants[i]);
-
-          if (!text) continue;
-
-          let processedVin = processConfusion(text);
-          let currentScore = scoreVin(processedVin);
-
-          if (currentScore > bestScore) {
-            bestScore = currentScore;
-            bestResult = processedVin;
-          }
-
-          // Deteksi warna otomatis dari varian apapun
-          let rawTextForColor = text.toUpperCase();
+          // Color Extraction Logic
+          const rawJoined = observations.join(" ").toUpperCase();
           for (let w of options.warna) {
-            if (rawTextForColor.includes(w) && !form.warna) {
+            if (rawJoined.includes(w)) {
               form.warna = w;
+              break;
             }
           }
-        }
-
-        await worker.terminate();
-
-        // Tampilkan hasil terbaik apa pun itu (tidak ada validasi memblokir/alert)
-        if (bestResult.length > 0) {
-          form.no_rangka = bestResult.substring(0, 17); // Batasi 17 digit
           try {
             navigator.vibrate(200);
           } catch (v) {}
         } else {
-          // Jika OCR benar-benar kosong/gagal baca
-          form.no_rangka = "";
-          alert("Gagal membaca gambar. Ketik manual atau foto ulang.");
+          alert("Pipeline gagal membaca VIN secara akurat. Silakan ketik manual.");
         }
       } catch (err) {
-        alert("Terjadi kesalahan sistem saat memuat Tesseract.");
+        alert("Pipeline error. Periksa koneksi jaringan Anda.");
         console.error(err);
       } finally {
         isProcessing.value = false;
-        ocrStatus.value = "";
+        pipelineStatus.value = "";
         event.target.value = "";
       }
     };
-
-    img.onerror = () => {
-      alert("Gagal memuat gambar.");
-      isProcessing.value = false;
-    };
-
     img.src = e.target.result;
   };
-
-  reader.onerror = () => {
-    alert("Gagal membaca file.");
-    isProcessing.value = false;
-  };
-
   reader.readAsDataURL(file);
 };
 
 const handleSubmit = () => {
-  if (!form.no_rangka) {
-    alert("Isi No Rangka (VIN)!");
-    return;
-  }
-  if (!form.tipe) {
-    alert("Isi Tipe & Varian Kendaraan!");
-    return;
-  }
-  if (!form.warna) {
-    alert("Pilih Warna!");
-    return;
-  }
+  if (!form.no_rangka) return alert("Isi No Rangka (VIN)!");
+  if (!form.tipe) return alert("Isi Tipe & Varian Kendaraan!");
+  if (!form.warna) return alert("Pilih Warna!");
 
   emit("submit", { ...form, stempel_qc: props.qcId });
   Object.assign(form, getInitialForm());
