@@ -28,9 +28,9 @@
           <video ref="videoElement" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
 
           <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 bg-black/40">
-            <!-- Kotak Bidik diperkecil menjadi 15% (Ideal untuk fokus potong Barcode cacat) -->
-            <div class="w-[90%] h-[15%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
-              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> JIKA BARCODE NEMPEL, DEKATKAN KAMERA FOKUS KE VIN SAJA </span>
+            <!-- Frame merah dikembalikan ke ukuran normal (25%) agar Warna ikut masuk bidikan -->
+            <div class="w-[90%] h-[25%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
+              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> DEKATKAN KAMERA. POSISIKAN <span class="text-red-400">WARNA & VIN</span> DI DALAM KOTAK </span>
               <div class="w-full h-[1px] bg-red-500/50 absolute top-1/2"></div>
             </div>
           </div>
@@ -379,7 +379,9 @@ const takeSnapshotAndRead = async () => {
     const vWidth = video.videoWidth;
     const vHeight = video.videoHeight;
     const cropWidth = vWidth * 0.9;
-    const cropHeight = vHeight * 0.15; // Kotak sudah di set 15% untuk lensa sempit (Fokus VIN)
+
+    // PERUBAHAN: Lensa/kotak dikembalikan ke ukuran semula (25%) agar tulisan warna di atas VIN bisa ter-scan
+    const cropHeight = vHeight * 0.25;
 
     const startX = (vWidth - cropWidth) / 2;
     const startY = (vHeight - cropHeight) / 2;
@@ -395,8 +397,13 @@ const takeSnapshotAndRead = async () => {
     const formData = new FormData();
     formData.append("base64Image", base64CroppedImage);
     formData.append("apikey", "helloworld");
-    formData.append("OCREngine", "2");
+
+    // MENGGUNAKAN OCR ENGINE 1: "Tabrak semua" - tidak peduli tulisan nempel di barcode, dia tetap paksa baca
+    formData.append("OCREngine", "1");
     formData.append("scale", "true");
+
+    // MEMBANTU ENGINE 1 MEMBACA PER BARIS AGAR TIDAK ACAK
+    formData.append("isTable", "true");
 
     const response = await fetch("https://api.ocr.space/parse/image", {
       method: "POST",
@@ -423,21 +430,24 @@ const takeSnapshotAndRead = async () => {
         if (rawText.includes("6REY") || rawText.includes("GPEY")) detectedColor = "GREY";
       }
 
+      // PEMBERSIH TYPO AGRESIF (Efek samping karena Engine 1 baca barcode sebagai huruf/simbol)
       let cleanText = rawText.replace(/I/g, "1").replace(/L/g, "1").replace(/\|/g, "1").replace(/!/g, "1").replace(/O/g, "0").replace(/Q/g, "0").replace(/D/g, "0");
 
       cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
 
+      // PENCARIAN VIN MUTLAK
       let mhkIndex = cleanText.indexOf("MHK");
       if (mhkIndex === -1) {
         mhkIndex = cleanText.indexOf("PM2");
       }
 
-      // Potong mutlak 17 digit
       if (mhkIndex !== -1 && cleanText.length >= mhkIndex + 17) {
         let finalVin = cleanText.substring(mhkIndex, mhkIndex + 17);
 
+        // KOREKSI JIKA TYPO PARAH MASIH LOLOS
         finalVin = finalVin.replace("8A1", "BA1");
         finalVin = finalVin.replace("B41", "BA1");
+        finalVin = finalVin.replace("P38A1", "P3BA1");
 
         form.no_rangka = finalVin;
         if (detectedColor) form.warna = detectedColor;
@@ -471,7 +481,6 @@ const handleSubmit = () => {
   }
 
   emit("submit", { ...form, stempel_qc: props.qcId });
-
   Object.assign(form, getInitialForm());
 };
 
