@@ -8,7 +8,7 @@
       </button>
     </div>
 
-    <!-- Kosong -->
+    <!-- Tampilan Jika Kosong -->
     <div v-if="offlineList.length === 0" class="bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-2 shadow-xs">
       <svg class="w-12 h-12 text-slate-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -19,10 +19,10 @@
         ></path>
       </svg>
       <p class="text-sm font-bold text-slate-700">Tidak ada data offline</p>
-      <p class="text-xs text-slate-400">Semua data inspeksi sudah di-upload ke database.</p>
+      <p class="text-xs text-slate-400">Semua data inspeksi sudah tersimpan di database atau belum ada input offline.</p>
     </div>
 
-    <!-- List Data Offline -->
+    <!-- Daftar Data Offline -->
     <div v-else class="space-y-3">
       <div v-for="(item, index) in offlineList" :key="item.id_lokal" class="bg-white border border-amber-300 rounded-2xl p-4 shadow-sm space-y-3 relative overflow-hidden">
         <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wider">Belum Upload</div>
@@ -47,6 +47,7 @@
 
         <div v-if="item.defect" class="text-xs text-red-600 bg-red-50 p-2 rounded-lg font-medium"><strong>Defect:</strong> {{ item.defect }} - {{ item.ket_defect }}</div>
 
+        <!-- Tombol Aksi: Hapus dan Upload ke Database -->
         <div class="flex gap-2 pt-1">
           <button @click="hapusItemLokal(index)" class="flex-1 bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 text-xs font-bold py-2.5 rounded-xl transition">Hapus</button>
           <button @click="uploadSatu(item, index)" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl transition shadow-xs flex items-center justify-center gap-1.5">
@@ -91,11 +92,12 @@ const uploadSatu = async (item, index) => {
   }
 
   try {
-    // Masukkan logika fetch / axios ke backend database Anda di sini
+    // Masukkan logika API/Database Anda di sini
     // Contoh: await axios.post('/api/claim', item);
 
-    await new Promise((resolve) => setTimeout(resolve, 600)); // Simulasi
+    await new Promise((resolve) => setTimeout(resolve, 600)); // Simulasi proses jaringan
 
+    // Hapus dari LocalStorage jika berhasil di-upload
     offlineList.value.splice(index, 1);
     localStorage.setItem("qc_offline_data", JSON.stringify(offlineList.value));
 
@@ -118,7 +120,7 @@ const uploadSemua = async () => {
 
   for (let i = sisaData.length - 1; i >= 0; i--) {
     try {
-      // Masukkan logika fetch / axios ke backend database Anda di sini
+      // Masukkan logika API/Database Anda di sini untuk setiap item
       await new Promise((resolve) => setTimeout(resolve, 400)); // Simulasi
       sisaData.splice(i, 1);
       suksesCount++;
