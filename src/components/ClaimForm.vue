@@ -379,8 +379,6 @@ const takeSnapshotAndRead = async () => {
     const vWidth = video.videoWidth;
     const vHeight = video.videoHeight;
     const cropWidth = vWidth * 0.9;
-
-    // TINGGI CROP 25% AGAR KAMERA BISA DIDEKATKAN
     const cropHeight = vHeight * 0.25;
 
     const startX = (vWidth - cropWidth) / 2;
@@ -399,7 +397,6 @@ const takeSnapshotAndRead = async () => {
     formData.append("apikey", "helloworld");
     formData.append("OCREngine", "2");
     formData.append("scale", "true");
-    formData.append("isTable", "true");
 
     const response = await fetch("https://api.ocr.space/parse/image", {
       method: "POST",
@@ -426,21 +423,17 @@ const takeSnapshotAndRead = async () => {
         if (rawText.includes("6REY") || rawText.includes("GPEY")) detectedColor = "GREY";
       }
 
-      // PEMBERSIHAN EKSTRA TINGKAT DEWA UNTUK MENGATASI BARCODE BA1
       let cleanText = rawText.replace(/I/g, "1").replace(/L/g, "1").replace(/\|/g, "1").replace(/!/g, "1").replace(/O/g, "0").replace(/Q/g, "0").replace(/D/g, "0");
 
       cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
 
-      // TOLERANSI PANJANG VIN (13 HINGGA 15 KARAKTER SETELAH MHK)
-      const vinRegex = /(MHK|PM2)[A-Z0-9]{13,15}/g;
-      let foundVINs = cleanText.match(vinRegex);
+      let mhkIndex = cleanText.indexOf("MHK");
+      if (mhkIndex === -1) {
+        mhkIndex = cleanText.indexOf("PM2");
+      }
 
-      if (foundVINs) {
-        let finalVin = foundVINs[0];
-
-        // KOREKSI MANUAL JIKA ADA SALAH BACA UMUM PADA DAIHATSU
-        finalVin = finalVin.replace("8A1", "BA1");
-        finalVin = finalVin.replace("B41", "BA1");
+      if (mhkIndex !== -1 && cleanText.length >= mhkIndex + 17) {
+        let finalVin = cleanText.substring(mhkIndex, mhkIndex + 17);
 
         form.no_rangka = finalVin;
         if (detectedColor) form.warna = detectedColor;
