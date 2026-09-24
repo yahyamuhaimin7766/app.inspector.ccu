@@ -5,7 +5,7 @@
       <input type="date" v-model="form.tanggal" required class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs" />
     </div>
 
-    <!-- No Rangka + Dual Tombol Kamera (Normal & Sniper BA1/P3) -->
+    <!-- No Rangka + Dual Tombol Kamera -->
     <div class="space-y-1.5">
       <div class="flex justify-between items-center" v-show="!sniperMode">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">No Rangka (VIN) *</label>
@@ -13,7 +13,7 @@
 
       <!-- DUAL TOMBOL PILIHAN KAMERA -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" v-show="!sniperMode">
-        <!-- Tombol 1: Scan Otomatis Normal -->
+        <!-- Tombol 1: Scan Otomatis -->
         <div class="relative">
           <input type="file" id="normalCameraInput" accept="image/*" capture="environment" @change="handleAutomaticScan" class="hidden" :disabled="isProcessing" />
           <label
@@ -32,7 +32,7 @@
           </label>
         </div>
 
-        <!-- Tombol 2: Mode Sniper Khusus BA1 / P3 -->
+        <!-- Tombol 2: Mode Crop Manual -->
         <div class="relative">
           <input type="file" id="sniperCameraInput" accept="image/*" capture="environment" @change="handleNativeCamera" class="hidden" :disabled="isProcessing" />
           <label
@@ -43,25 +43,56 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
-            <span>🎯 Mode Sniper BA1 / P3</span>
+            <span>🎯 Potong Manual BA1/P3</span>
           </label>
         </div>
       </div>
 
-      <!-- UI SNIPER CANVAS MODE -->
+      <!-- UI MANUAL CROP MODE -->
       <div v-show="sniperMode" class="bg-slate-900 rounded-2xl p-3 border-2 border-amber-500 shadow-xl space-y-3 relative">
-        <div class="bg-amber-500 text-slate-950 text-xs font-extrabold py-2 px-3 rounded-lg text-center shadow-md animate-pulse">🎯 MODE SNIPER AKTIF: Sentuh tepat di tengah tulisan (MHKP3 / MHKBA1) untuk menembus tinta!</div>
+        <div class="bg-amber-500 text-slate-950 text-xs font-extrabold py-2 px-3 rounded-lg text-center shadow-md">Geser kotak merah ini pas ke tulisan VIN, lalu klik Proses.</div>
 
-        <div class="relative w-full overflow-hidden rounded-xl bg-black flex justify-center border border-slate-700">
-          <canvas ref="photoCanvas" @click="handleCanvasClick" class="max-w-full h-auto cursor-crosshair touch-none"></canvas>
+        <div class="relative w-full overflow-hidden rounded-xl bg-black flex justify-center border border-slate-700 select-none touch-none">
+          <canvas ref="photoCanvas" class="max-w-full h-auto"></canvas>
 
-          <div v-if="isProcessing" class="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-10 backdrop-blur-sm">
+          <!-- Overlay Penggelap -->
+          <div class="absolute inset-0 bg-black/50 pointer-events-none"></div>
+
+          <!-- Kotak Pemotong (Movable & Resizable) -->
+          <div
+            ref="cropBox"
+            class="absolute border-2 border-red-500 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] cursor-move touch-none"
+            :style="{
+              left: cropState.x + 'px',
+              top: cropState.y + 'px',
+              width: cropState.w + 'px',
+              height: cropState.h + 'px',
+            }"
+            @mousedown="startDrag"
+            @touchstart="startDrag"
+          >
+            <!-- Tampilan Kotak Bersih di Dalam -->
+            <div class="w-full h-full bg-transparent"></div>
+
+            <!-- Handle Resize Bawah -->
+            <div class="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-4 bg-red-500 rounded-full cursor-ns-resize touch-none" @mousedown.stop="startResize" @touchstart.stop="startResize">
+              <div class="w-4 h-1 bg-white mx-auto mt-1.5 rounded"></div>
+            </div>
+          </div>
+
+          <div v-if="isProcessing" class="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-50 backdrop-blur-sm pointer-events-none">
             <span class="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-2"></span>
-            <span class="text-white font-bold text-sm">Menganalisa dengan Engine 2...</span>
+            <span class="text-white font-bold text-sm">Memproses Potongan...</span>
           </div>
         </div>
 
-        <button type="button" @click="cancelSniper" class="w-full bg-slate-700 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-slate-600 transition shadow-md">Batal & Foto Ulang</button>
+        <div class="flex gap-2">
+          <button type="button" @click="cancelSniper" class="flex-1 bg-slate-700 text-white font-bold py-3 rounded-xl text-xs hover:bg-slate-600 transition shadow-md">Batal</button>
+          <button type="button" @click="processCrop" class="flex-1 bg-amber-600 text-white font-bold py-3 rounded-xl text-xs hover:bg-amber-700 transition shadow-md flex items-center justify-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            Proses Potongan
+          </button>
+        </div>
       </div>
 
       <div class="relative mt-2" v-show="!sniperMode">
@@ -163,7 +194,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from "vue";
+import { reactive, ref, watch, onMounted, onUnmounted } from "vue";
 
 const props = defineProps({
   loading: Boolean,
@@ -305,6 +336,9 @@ const isProcessing = ref(false);
 const sniperMode = ref(false);
 const photoCanvas = ref(null);
 
+// State untuk crop manual
+const cropState = reactive({ x: 0, y: 0, w: 0, h: 0, isDragging: false, isResizing: false, startX: 0, startY: 0, initialX: 0, initialY: 0, initialH: 0 });
+
 watch(
   () => props.editData,
   (newData) => {
@@ -336,12 +370,12 @@ watch(
   }
 );
 
-// 1. SCANNER OTOMATIS (UNTUK LABEL NORMAL) MENGGUNAKAN ENGINE 2
+// 1. SCANNER OTOMATIS
 const handleAutomaticScan = (event) => {
   processImageWithOCR(event, "2", false);
 };
 
-// 2. TRIGGER MODE SNIPER (UNTUK LABEL BA1 / P3)
+// 2. TRIGGER MODE CROP MANUAL
 const handleNativeCamera = (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -368,6 +402,12 @@ const handleNativeCamera = (event) => {
         canvas.width = width;
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
+
+        // Inisialisasi kotak crop di tengah
+        cropState.w = width * 0.9;
+        cropState.h = height * 0.15;
+        cropState.x = (width - cropState.w) / 2;
+        cropState.y = (height - cropState.h) / 2;
       }, 100);
     };
     img.src = e.target.result;
@@ -376,7 +416,100 @@ const handleNativeCamera = (event) => {
   event.target.value = "";
 };
 
-// 3. PROSES UTAMA OCR API
+// --- LOGIKA DRAG & RESIZE CROP BOX ---
+const getEventPos = (e) => {
+  if (e.touches && e.touches.length > 0) {
+    return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+  return { x: e.clientX, y: e.clientY };
+};
+
+const startDrag = (e) => {
+  e.preventDefault();
+  cropState.isDragging = true;
+  const pos = getEventPos(e);
+  cropState.startX = pos.x;
+  cropState.startY = pos.y;
+  cropState.initialX = cropState.x;
+  cropState.initialY = cropState.y;
+};
+
+const startResize = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  cropState.isResizing = true;
+  const pos = getEventPos(e);
+  cropState.startY = pos.y;
+  cropState.initialH = cropState.h;
+};
+
+const onMove = (e) => {
+  if (cropState.isDragging) {
+    const pos = getEventPos(e);
+    const dx = pos.x - cropState.startX;
+    const dy = pos.y - cropState.startY;
+
+    let newX = cropState.initialX + dx;
+    let newY = cropState.initialY + dy;
+
+    // Batasi agar kotak tidak keluar canvas
+    if (newX < 0) newX = 0;
+    if (newY < 0) newY = 0;
+    if (newX + cropState.w > photoCanvas.value.width) newX = photoCanvas.value.width - cropState.w;
+    if (newY + cropState.h > photoCanvas.value.height) newY = photoCanvas.value.height - cropState.h;
+
+    cropState.x = newX;
+    cropState.y = newY;
+  } else if (cropState.isResizing) {
+    const pos = getEventPos(e);
+    const dy = pos.y - cropState.startY;
+    let newH = cropState.initialH + dy;
+
+    if (newH < 30) newH = 30; // Min height
+    if (cropState.y + newH > photoCanvas.value.height) newH = photoCanvas.value.height - cropState.y;
+
+    cropState.h = newH;
+  }
+};
+
+const endDragOrResize = () => {
+  cropState.isDragging = false;
+  cropState.isResizing = false;
+};
+
+onMounted(() => {
+  window.addEventListener("mousemove", onMove, { passive: false });
+  window.addEventListener("touchmove", onMove, { passive: false });
+  window.addEventListener("mouseup", endDragOrResize);
+  window.addEventListener("touchend", endDragOrResize);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("mousemove", onMove);
+  window.removeEventListener("touchmove", onMove);
+  window.removeEventListener("mouseup", endDragOrResize);
+  window.removeEventListener("touchend", endDragOrResize);
+});
+// -------------------------------------
+
+// 3. PROSES POTONGAN (MANUAL)
+const processCrop = async () => {
+  if (isProcessing.value) return;
+
+  const canvas = photoCanvas.value;
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = cropState.w;
+  tempCanvas.height = cropState.h;
+  const ctx = tempCanvas.getContext("2d");
+
+  ctx.drawImage(canvas, cropState.x, cropState.y, cropState.w, cropState.h, 0, 0, tempCanvas.width, tempCanvas.height);
+  const base64Crop = tempCanvas.toDataURL("image/jpeg", 1.0);
+
+  // Proses dengan Engine 2
+  await processImageWithOCR(null, "2", true, base64Crop);
+};
+
+// PROSES UTAMA OCR API
 const processImageWithOCR = async (event, engineVersion, isCropped, customBase64 = null) => {
   isProcessing.value = true;
 
@@ -399,7 +532,6 @@ const processImageWithOCR = async (event, engineVersion, isCropped, customBase64
       if (result && result.ParsedResults && result.ParsedResults.length > 0) {
         let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
 
-        // Deteksi Warna (Hanya untuk scan otomatis normal)
         if (!isCropped) {
           let detectedColor = "";
           for (let w of options.warna) {
@@ -437,9 +569,9 @@ const processImageWithOCR = async (event, engineVersion, isCropped, customBase64
           } catch (e) {}
         } else {
           if (isCropped) {
-            alert("Kurang pas. Sentuh TEPAT di tengah-tengah tulisan MHKP3 / MHKBA1.");
+            alert("Kotak merah masih mengenai barcode atau belum pas di teks VIN. Coba geser sedikit lagi.");
           } else {
-            alert("Gagal membaca VIN otomatis. Silakan gunakan tombol 🎯 Mode Sniper khusus BA1/P3.");
+            alert("Gagal membaca VIN otomatis. Silakan gunakan tombol 🎯 Potong Manual BA1/P3.");
           }
         }
       } else {
@@ -483,32 +615,6 @@ const processImageWithOCR = async (event, engineVersion, isCropped, customBase64
     };
     reader.readAsDataURL(file);
   }
-};
-
-// 4. SAAT KLIK KANVAS DI MODE SNIPER
-const handleCanvasClick = async (event) => {
-  if (isProcessing.value) return;
-
-  const canvas = photoCanvas.value;
-  const rect = canvas.getBoundingClientRect();
-  const scaleY = canvas.height / rect.height;
-  const clickY = (event.clientY - rect.top) * scaleY;
-
-  const cropHeight = canvas.height * 0.1;
-  let startY = clickY - cropHeight / 2;
-  if (startY < 0) startY = 0;
-  if (startY + cropHeight > canvas.height) startY = canvas.height - cropHeight;
-
-  const tempCanvas = document.createElement("canvas");
-  tempCanvas.width = canvas.width;
-  tempCanvas.height = cropHeight;
-  const ctx = tempCanvas.getContext("2d");
-
-  ctx.drawImage(canvas, 0, startY, canvas.width, cropHeight, 0, 0, tempCanvas.width, tempCanvas.height);
-  const base64Crop = tempCanvas.toDataURL("image/jpeg", 1.0);
-
-  // Proses potongan dengan OCR Engine 2
-  await processImageWithOCR(null, "2", true, base64Crop);
 };
 
 const cancelSniper = () => {
