@@ -5,7 +5,7 @@
       <input type="date" v-model="form.tanggal" required class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs" />
     </div>
 
-    <!-- No Rangka + Kamera OCR -->
+    <!-- No Rangka + Kamera -->
     <div class="space-y-1.5">
       <div class="flex justify-between items-center">
         <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">No Rangka (VIN) *</label>
@@ -19,7 +19,7 @@
             />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <span>{{ isScanning ? "Tutup Kamera" : "Buka Kamera OCR" }}</span>
+          <span>{{ isScanning ? "Tutup Kamera" : "Jepret Barcode VIN" }}</span>
         </button>
       </div>
 
@@ -28,9 +28,9 @@
           <video ref="videoElement" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
 
           <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 bg-black/40">
-            <!-- Frame merah dikembalikan ke ukuran normal (25%) agar Warna ikut masuk bidikan -->
+            <!-- Frame merah 25% pembidik Barcode -->
             <div class="w-[90%] h-[25%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
-              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> DEKATKAN KAMERA. POSISIKAN <span class="text-red-400">WARNA & VIN</span> DI DALAM KOTAK </span>
+              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> POSISIKAN SEMUA BARCODE DI KOTAK </span>
               <div class="w-full h-[1px] bg-red-500/50 absolute top-1/2"></div>
             </div>
           </div>
@@ -50,17 +50,17 @@
               />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span>Jepret & Baca</span>
+            <span>Jepret & Cari Barcode</span>
           </button>
 
           <div v-else class="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 bg-slate-800 border-2 border-slate-600 text-white font-bold py-2.5 px-6 rounded-full text-sm shadow-xl flex items-center gap-2">
             <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            Menganalisa...
+            Mencari Barcode...
           </div>
         </div>
 
         <button type="button" @click="stopScanner" class="w-full bg-red-600 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-red-700 transition flex items-center justify-center gap-1.5 shadow-md">
-          <span>Tutup Kamera OCR</span>
+          <span>Tutup Kamera Scanner</span>
         </button>
       </div>
 
@@ -68,7 +68,7 @@
         <input
           type="text"
           v-model="form.no_rangka"
-          placeholder="Scan OCR atau ketik..."
+          placeholder="Scan Barcode atau ketik..."
           required
           class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs font-mono tracking-wide font-bold"
         />
@@ -87,14 +87,10 @@
         </span>
         <span v-else-if="form.tipe === 'Tipe Tidak Ditemukan'" class="text-red-500 italic font-bold"> ⚠ Tipe tidak ditemukan di Master NIK </span>
         <span v-else class="text-slate-400 italic text-sm"> Terisi otomatis... </span>
-
-        <svg v-if="form.tipe && form.tipe !== 'Tipe Tidak Ditemukan'" class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-        </svg>
       </div>
     </div>
 
-    <!-- Warna Grid -->
+    <!-- Warna Grid (Manual karena Barcode tidak simpan nama warna) -->
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Warna *</label>
       <div class="grid grid-cols-4 gap-2">
@@ -370,6 +366,7 @@ const stopScanner = () => {
   isScanning.value = false;
 };
 
+// API Pembaca Barcode ZXing (Gratis, membaca dari gambar base64)
 const takeSnapshotAndRead = async () => {
   if (!videoElement.value) return;
   isProcessing.value = true;
@@ -379,9 +376,7 @@ const takeSnapshotAndRead = async () => {
     const vWidth = video.videoWidth;
     const vHeight = video.videoHeight;
     const cropWidth = vWidth * 0.9;
-
-    // PERUBAHAN: Lensa/kotak dikembalikan ke ukuran semula (25%) agar tulisan warna di atas VIN bisa ter-scan
-    const cropHeight = vHeight * 0.25;
+    const cropHeight = vHeight * 0.5; // Agak lebar agar semua barcode di label terambil
 
     const startX = (vWidth - cropWidth) / 2;
     const startY = (vHeight - cropHeight) / 2;
@@ -392,77 +387,42 @@ const takeSnapshotAndRead = async () => {
     const ctx = canvas.getContext("2d");
 
     ctx.drawImage(video, startX, startY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+
+    // Convert to base64
     const base64CroppedImage = canvas.toDataURL("image/jpeg", 1.0);
+    // Hapus header data:image/jpeg;base64,
+    const base64Data = base64CroppedImage.split(",")[1];
 
-    const formData = new FormData();
-    formData.append("base64Image", base64CroppedImage);
-    formData.append("apikey", "helloworld");
+    // Menggunakan API Zxing org (API Publik Gratis untuk membaca Barcode dari gambar)
+    const formData = new URLSearchParams();
+    formData.append("file", base64Data);
 
-    // MENGGUNAKAN OCR ENGINE 1: "Tabrak semua" - tidak peduli tulisan nempel di barcode, dia tetap paksa baca
-    formData.append("OCREngine", "1");
-    formData.append("scale", "true");
-
-    // MEMBANTU ENGINE 1 MEMBACA PER BARIS AGAR TIDAK ACAK
-    formData.append("isTable", "true");
-
-    const response = await fetch("https://api.ocr.space/parse/image", {
+    // Kita kirim ke API Barcode Reader
+    const response = await fetch("https://zxing.org/w/decode", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
       body: formData,
     });
 
-    const result = await response.json();
+    const responseText = await response.text();
 
-    if (result && result.ParsedResults && result.ParsedResults.length > 0) {
-      let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
+    // ZXing API mengembalikan HTML, kita cukup mencari format VIN Daihatsu di dalamnya
+    const vinRegex = /(MHK|PM2)[A-Z0-9]{14}/g;
+    const match = responseText.toUpperCase().match(vinRegex);
 
-      let detectedColor = "";
-      for (let w of options.warna) {
-        if (rawText.includes(w)) {
-          detectedColor = w;
-          break;
-        }
-      }
-
-      if (!detectedColor) {
-        if (rawText.includes("WH1TE") || rawText.includes("WHTE")) detectedColor = "WHITE";
-        if (rawText.includes("S1LVER") || rawText.includes("SLVER")) detectedColor = "SILVER";
-        if (rawText.includes("8LACK") || rawText.includes("BLCK")) detectedColor = "BLACK";
-        if (rawText.includes("6REY") || rawText.includes("GPEY")) detectedColor = "GREY";
-      }
-
-      // PEMBERSIH TYPO AGRESIF (Efek samping karena Engine 1 baca barcode sebagai huruf/simbol)
-      let cleanText = rawText.replace(/I/g, "1").replace(/L/g, "1").replace(/\|/g, "1").replace(/!/g, "1").replace(/O/g, "0").replace(/Q/g, "0").replace(/D/g, "0");
-
-      cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
-
-      // PENCARIAN VIN MUTLAK
-      let mhkIndex = cleanText.indexOf("MHK");
-      if (mhkIndex === -1) {
-        mhkIndex = cleanText.indexOf("PM2");
-      }
-
-      if (mhkIndex !== -1 && cleanText.length >= mhkIndex + 17) {
-        let finalVin = cleanText.substring(mhkIndex, mhkIndex + 17);
-
-        // KOREKSI JIKA TYPO PARAH MASIH LOLOS
-        finalVin = finalVin.replace("8A1", "BA1");
-        finalVin = finalVin.replace("B41", "BA1");
-        finalVin = finalVin.replace("P38A1", "P3BA1");
-
-        form.no_rangka = finalVin;
-        if (detectedColor) form.warna = detectedColor;
-        try {
-          navigator.vibrate(200);
-        } catch (e) {}
-        stopScanner();
-      } else {
-        alert("Gagal mendeteksi VIN. Teks yang tertangkap:\n" + rawText);
-      }
+    if (match) {
+      form.no_rangka = match[0];
+      try {
+        navigator.vibrate(200);
+      } catch (e) {}
+      stopScanner();
     } else {
-      alert("Gambar tidak jelas. Pastikan cahaya cukup dan fokus.");
+      alert("Gagal membaca barcode VIN. Pastikan barcode lurus dan fokus.");
     }
   } catch (err) {
-    alert("Koneksi OCR gagal. Pastikan sinyal stabil.");
+    alert("Koneksi gagal atau Barcode tidak ditemukan.");
   } finally {
     isProcessing.value = false;
   }
