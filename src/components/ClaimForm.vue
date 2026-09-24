@@ -56,21 +56,15 @@
     <!-- Tipe Otomatis / Manual -->
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Tipe & Varian Kendaraan *</label>
-      <div class="relative">
-        <select
-          v-model="form.tipe"
-          required
-          class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs appearance-none font-bold cursor-pointer"
-          :class="{ 'text-indigo-800 bg-indigo-50 border-indigo-300': form.tipe }"
-        >
-          <option value="" disabled>Terisi otomatis atau pilih manual...</option>
-          <option v-for="t in uniqueTipes" :key="t" :value="t">{{ t }}</option>
-        </select>
-        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-        </div>
-      </div>
-      <p class="text-[10px] text-slate-500">Jika Anda mengetik VIN manual secara singkat, pilih tipe mobil di atas secara manual.</p>
+      <input
+        type="text"
+        v-model="form.tipe"
+        placeholder="Otomatis atau ketik manual..."
+        required
+        class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs font-bold"
+        :class="{ 'text-indigo-800 bg-indigo-50 border-indigo-300': form.tipe }"
+      />
+      <p class="text-[10px] text-slate-500">Terisi otomatis dari 17 digit VIN. Bebas ketik manual jika input singkatan cacat.</p>
     </div>
 
     <!-- Warna Grid -->
@@ -269,9 +263,6 @@ const masterNik = {
   MHKAB1ACX: "NEW AYLA R",
 };
 
-// Mengambil daftar unik Tipe Kendaraan untuk Dropdown Manual
-const uniqueTipes = Array.from(new Set(Object.values(masterNik))).sort();
-
 const getTodayDate = () => new Date().toISOString().split("T")[0];
 
 const getInitialForm = () => ({
@@ -312,11 +303,11 @@ watch(
   () => form.no_rangka,
   (newVal) => {
     if (newVal) {
-      const cleanVal = newVal.replace(/\s/g, "").toUpperCase(); // Abaikan spasi yang diketik manual
+      const cleanVal = newVal.replace(/\s/g, "").toUpperCase();
       if (cleanVal.length >= 9) {
         const prefix = cleanVal.substring(0, 9);
         if (masterNik[prefix]) {
-          form.tipe = masterNik[prefix];
+          form.tipe = masterNik[prefix]; // Auto-fill jika terdaftar di Master NIK
         }
       }
     } else if (!props.editData) {
@@ -405,7 +396,7 @@ const handleNativeCamera = (event) => {
               navigator.vibrate(200);
             } catch (e) {}
           } else {
-            alert("Gagal mendeteksi VIN 17 digit.\n\nJika label cacat, silakan ketik singkatan manual (Misal: BA1 12345) pada kolom VIN.");
+            alert("Gagal mendeteksi VIN 17 digit.\n\nJika label cacat, silakan ketik manual.");
           }
         } else {
           alert("Gagal membaca foto. Pastikan gambar jelas dan terang.");
@@ -428,7 +419,7 @@ const handleSubmit = () => {
     return;
   }
   if (!form.tipe) {
-    alert("Pilih Tipe & Varian Kendaraan!");
+    alert("Isi Tipe & Varian Kendaraan!");
     return;
   }
   if (!form.warna) {
