@@ -30,7 +30,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             <span class="text-sm">Buka Kamera HP (Smart OCR)</span>
-            <span class="text-[10px] text-slate-400 font-normal">Candidate Validation & Confusion Map Aktif</span>
+            <span class="text-[10px] text-slate-400 font-normal">Tesseract v5 Pipeline</span>
           </div>
 
           <div v-else class="flex flex-col items-center gap-2">
@@ -144,7 +144,6 @@
 
 <script setup>
 import { reactive, ref, watch } from "vue";
-// Import khusus Tesseract versi 5 terbaru
 import { createWorker } from "tesseract.js";
 
 const props = defineProps({
@@ -255,74 +254,75 @@ watch(
 );
 
 // ==========================================
-// ADVANCED OCR PIPELINE & CANDIDATE LOGIC
+// CANDIDATE GENERATION & VALIDATION
 // ==========================================
 
 const VIN_PREFIXES = ["MHK", "PM2"];
 const CONFUSION_MAP = {
-  S: ["3", "5"],
-  B: ["8"],
-  8: ["B"],
-  Z: ["2"],
-  G: ["6"],
-  I: ["1"],
-  O: ["0"],
-  Q: ["0"],
+  S: "3",
+  5: "3",
+  B: "8",
+  8: "B",
+  Z: "2",
+  G: "6",
+  I: "1",
+  O: "0",
+  Q: "0",
+  L: "1",
+  "!": "1",
+  "|": "1",
 };
 
-function evaluateCandidate(vinString, ocrConfidence) {
+function scoreVin(vin) {
   let score = 0;
-  if (vinString.length === 17) score += 40;
-
-  const hasValidPrefix = VIN_PREFIXES.some((p) => vinString.startsWith(p));
-  if (hasValidPrefix) score += 30;
-
-  if (!/[IOQ]/.test(vinString)) score += 10;
-
-  if (vinString.length > 5 && /[0-9]/.test(vinString[4])) {
-    score += 15;
-  }
-
-  score += (ocrConfidence / 100) * 20;
+  if (vin.length === 17) score += 50;
+  if (VIN_PREFIXES.some((p) => vin.startsWith(p))) score += 30;
+  // Periksa apakah VDS karakter ke-5 (index 4) adalah angka
+  if (vin.length > 5 && /[0-9]/.test(vin[4])) score += 20;
   return score;
 }
 
-function generateCandidates(rawText, confidence) {
-  let baseString = rawText.replace(/[^A-Z0-9]/g, "").toUpperCase();
+function processConfusion(rawText) {
+  // Membersihkan karakter aneh
+  let text = rawText.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-  let mhkIdx = baseString.indexOf("MHK");
-  if (mhkIdx === -1) mhkIdx = baseString.indexOf("PM2");
-  if (mhkIdx !== -1) {
-    baseString = baseString.substring(mhkIdx, mhkIdx + 17);
+  // Mencari potongan VIN
+  let match = text.match(/(MHK|PM2)[A-Z0-9]{12,16}/);
+  let baseVin = match ? match[0] : text.substring(0, 17);
+
+  // Jika panjang masih kurang, pertahankan apa adanya (biarkan operator ngetik sisanya)
+  if (baseVin.length < 5) return baseVin;
+
+  let corrected = baseVin.split("");
+
+  // Rule 1: VIN dilarang pakai I, O, Q
+  for (let i = 0; i < corrected.length; i++) {
+    if (corrected[i] === "I" || corrected[i] === "L") corrected[i] = "1";
+    if (corrected[i] === "O" || corrected[i] === "Q") corrected[i] = "0";
   }
 
-  let candidates = [{ text: baseString, score: evaluateCandidate(baseString, confidence) }];
+  // Rule 2: Spesifik untuk masalah "MHKPS" -> harusnya "MHKP3"
+  // Karakter indeks 4 biasanya adalah angka 3 atau huruf terkait VDS
+  if (corrected.length > 4 && (corrected[4] === "S" || corrected[4] === "5")) {
+    corrected[4] = "3";
+  }
 
-  if (candidates[0].score > 90 && baseString.length === 17) return candidates;
-
-  let arr = baseString.split("");
-  for (let i = 0; i < arr.length; i++) {
-    let char = arr[i];
+  // Rule 3: Iterasi Confusion Map secara umum untuk indeks sisanya
+  for (let i = 5; i < corrected.length; i++) {
+    let char = corrected[i];
     if (CONFUSION_MAP[char]) {
-      CONFUSION_MAP[char].forEach((replacement) => {
-        let newVariant = [...arr];
-        newVariant[i] = replacement;
-        let newVin = newVariant.join("");
-        candidates.push({
-          text: newVin,
-          score: evaluateCandidate(newVin, confidence * 0.95),
-        });
-      });
+      corrected[i] = CONFUSION_MAP[char];
     }
   }
-  return candidates;
+
+  return corrected.join("");
 }
 
 function getCanvasVariant(img, type) {
   const canvas = document.createElement("canvas");
-  // Crop area fokus tengah gambar (VIN)
-  const cWidth = img.width * 0.8;
-  const cHeight = img.height * 0.3;
+  // Crop area lebih lebar (95%) untuk antisipasi label tidak pas tengah
+  const cWidth = img.width * 0.95;
+  const cHeight = img.height * 0.4;
   canvas.width = cWidth;
   canvas.height = cHeight;
 
@@ -335,16 +335,19 @@ function getCanvasVariant(img, type) {
   const imageData = ctx.getImageData(0, 0, cWidth, cHeight);
   const data = imageData.data;
 
-  if (type === "grayscale" || type === "otsu") {
+  if (type === "high-contrast") {
     for (let i = 0; i < data.length; i += 4) {
       let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      avg = avg < 128 ? avg * 0.8 : avg * 1.2;
+      avg = avg < 128 ? avg * 0.5 : avg * 1.5; // Ekstrem contrast
       if (avg > 255) avg = 255;
-
-      if (type === "otsu") {
-        avg = avg > 120 ? 255 : 0;
-      }
-
+      data[i] = avg;
+      data[i + 1] = avg;
+      data[i + 2] = avg;
+    }
+  } else if (type === "otsu") {
+    for (let i = 0; i < data.length; i += 4) {
+      let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      avg = avg > 110 ? 255 : 0;
       data[i] = avg;
       data[i + 1] = avg;
       data[i + 2] = avg;
@@ -375,61 +378,72 @@ const handleAdvancedOCR = (event) => {
         }
 
         ocrStatus.value = "Membuat Image Variant...";
-        const variants = [getCanvasVariant(img, "grayscale"), getCanvasVariant(img, "otsu")];
+        // Kita gunakan 2 varian untuk ketangguhan
+        const variants = [
+          img.src, // Gambar Asli
+          getCanvasVariant(img, "high-contrast"),
+          getCanvasVariant(img, "otsu"),
+        ];
 
-        ocrStatus.value = "Memulai Tesseract v5...";
+        ocrStatus.value = "Memulai Mesin OCR...";
 
-        // Syntax Baru Tesseract v5
         const worker = await createWorker("eng", 1, {
           logger: (m) => {
             if (m.status === "recognizing text") {
-              ocrStatus.value = `Membaca: ${Math.round(m.progress * 100)}%`;
+              ocrStatus.value = `Membaca Teks: ${Math.round(m.progress * 100)}%`;
             }
           },
         });
 
+        // Mode 6: Assume a single uniform block of text. Sangat aman jika crop meleset.
         await worker.setParameters({
-          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-          tessedit_pageseg_mode: "7", // Single line mode
+          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",
+          tessedit_pageseg_mode: "6",
         });
 
-        let allCandidates = [];
+        let bestResult = "";
+        let bestScore = -1;
 
         for (let i = 0; i < variants.length; i++) {
           ocrStatus.value = `Menganalisa Varian ${i + 1}/${variants.length}...`;
           const {
-            data: { text, confidence },
+            data: { text },
           } = await worker.recognize(variants[i]);
 
-          let generated = generateCandidates(text, confidence);
-          allCandidates = allCandidates.concat(generated);
+          if (!text) continue;
+
+          let processedVin = processConfusion(text);
+          let currentScore = scoreVin(processedVin);
+
+          if (currentScore > bestScore) {
+            bestScore = currentScore;
+            bestResult = processedVin;
+          }
+
+          // Deteksi warna otomatis dari varian apapun
+          let rawTextForColor = text.toUpperCase();
+          for (let w of options.warna) {
+            if (rawTextForColor.includes(w) && !form.warna) {
+              form.warna = w;
+            }
+          }
         }
 
         await worker.terminate();
 
-        ocrStatus.value = "Validasi & Scoring Kandidat...";
-        allCandidates.sort((a, b) => b.score - a.score);
-
-        if (allCandidates.length > 0 && allCandidates[0].score > 50) {
-          form.no_rangka = allCandidates[0].text;
-
-          // Deteksi warna otomatis
-          let rawTextForColor = allCandidates[0].text + text;
-          for (let w of options.warna) {
-            if (rawTextForColor.includes(w)) {
-              form.warna = w;
-              break;
-            }
-          }
-
+        // Tampilkan hasil terbaik apa pun itu (tidak ada validasi memblokir/alert)
+        if (bestResult.length > 0) {
+          form.no_rangka = bestResult.substring(0, 17); // Batasi 17 digit
           try {
             navigator.vibrate(200);
           } catch (v) {}
         } else {
-          alert("Gagal memvalidasi struktur VIN. Silakan ketik manual sisa digitnya.");
+          // Jika OCR benar-benar kosong/gagal baca
+          form.no_rangka = "";
+          alert("Gagal membaca gambar. Ketik manual atau foto ulang.");
         }
       } catch (err) {
-        alert("Terjadi kesalahan pada mesin OCR Tesseract.");
+        alert("Terjadi kesalahan sistem saat memuat Tesseract.");
         console.error(err);
       } finally {
         isProcessing.value = false;
@@ -468,7 +482,6 @@ const handleSubmit = () => {
     return;
   }
 
-  // Langsung kirim (Emit) secara Online, mode offline sudah dihapus
   emit("submit", { ...form, stempel_qc: props.qcId });
   Object.assign(form, getInitialForm());
 };
