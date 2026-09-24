@@ -28,8 +28,9 @@
           <video ref="videoElement" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
 
           <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10 bg-black/40">
-            <div class="w-[90%] h-[18%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
-              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> POSISIKAN <span class="text-red-400">WARNA & VIN</span> DI DALAM KOTAK </span>
+            <!-- Frame merah disesuaikan ukurannya menjadi 25% -->
+            <div class="w-[90%] h-[25%] border-2 border-red-500 rounded bg-transparent shadow-[0_0_0_999px_rgba(0,0,0,0.6)] relative">
+              <span class="absolute -top-6 left-0 right-0 text-center text-[10px] text-white font-bold drop-shadow-md"> DEKATKAN KAMERA. POSISIKAN <span class="text-red-400">WARNA & VIN</span> DI DALAM KOTAK </span>
               <div class="w-full h-[1px] bg-red-500/50 absolute top-1/2"></div>
             </div>
           </div>
@@ -170,7 +171,7 @@ import { reactive, ref, onBeforeUnmount, nextTick, watch } from "vue";
 const props = defineProps({
   loading: Boolean,
   editData: Object,
-  qcId: String, // Menerima ID QC otomatis dari App.vue
+  qcId: String,
 });
 const emit = defineEmits(["submit", "reset"]);
 
@@ -378,7 +379,10 @@ const takeSnapshotAndRead = async () => {
     const vWidth = video.videoWidth;
     const vHeight = video.videoHeight;
     const cropWidth = vWidth * 0.9;
-    const cropHeight = vHeight * 0.18;
+
+    // TINGGI CROP 25% AGAR KAMERA BISA DIDEKATKAN
+    const cropHeight = vHeight * 0.25;
+
     const startX = (vWidth - cropWidth) / 2;
     const startY = (vHeight - cropHeight) / 2;
 
@@ -393,8 +397,9 @@ const takeSnapshotAndRead = async () => {
     const formData = new FormData();
     formData.append("base64Image", base64CroppedImage);
     formData.append("apikey", "helloworld");
-    formData.append("OCREngine", "1");
+    formData.append("OCREngine", "2");
     formData.append("scale", "true");
+    formData.append("isTable", "true");
 
     const response = await fetch("https://api.ocr.space/parse/image", {
       method: "POST",
@@ -418,17 +423,26 @@ const takeSnapshotAndRead = async () => {
         if (rawText.includes("WH1TE") || rawText.includes("WHTE")) detectedColor = "WHITE";
         if (rawText.includes("S1LVER") || rawText.includes("SLVER")) detectedColor = "SILVER";
         if (rawText.includes("8LACK") || rawText.includes("BLCK")) detectedColor = "BLACK";
-        if (rawText.includes("6REY")) detectedColor = "GREY";
+        if (rawText.includes("6REY") || rawText.includes("GPEY")) detectedColor = "GREY";
       }
 
-      let cleanText = rawText.replace(/I/g, "1").replace(/O/g, "0").replace(/Q/g, "0");
+      // PEMBERSIHAN EKSTRA TINGKAT DEWA UNTUK MENGATASI BARCODE BA1
+      let cleanText = rawText.replace(/I/g, "1").replace(/L/g, "1").replace(/\|/g, "1").replace(/!/g, "1").replace(/O/g, "0").replace(/Q/g, "0").replace(/D/g, "0");
+
       cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
 
-      const vinRegex = /(MHK|PM2)[A-Z0-9]{14}/g;
-      const foundVINs = cleanText.match(vinRegex);
+      // TOLERANSI PANJANG VIN (13 HINGGA 15 KARAKTER SETELAH MHK)
+      const vinRegex = /(MHK|PM2)[A-Z0-9]{13,15}/g;
+      let foundVINs = cleanText.match(vinRegex);
 
       if (foundVINs) {
-        form.no_rangka = foundVINs[0];
+        let finalVin = foundVINs[0];
+
+        // KOREKSI MANUAL JIKA ADA SALAH BACA UMUM PADA DAIHATSU
+        finalVin = finalVin.replace("8A1", "BA1");
+        finalVin = finalVin.replace("B41", "BA1");
+
+        form.no_rangka = finalVin;
         if (detectedColor) form.warna = detectedColor;
         try {
           navigator.vibrate(200);
@@ -461,7 +475,6 @@ const handleSubmit = () => {
 
   emit("submit", { ...form, stempel_qc: props.qcId });
 
-  // PERUBAHAN: Setelah submit, form seketika dibersihkan otomatis (kecuali tanggal harian)
   Object.assign(form, getInitialForm());
 };
 
@@ -470,4 +483,3 @@ const handleReset = () => {
   emit("reset");
 };
 </script>
-  
