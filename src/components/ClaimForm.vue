@@ -189,7 +189,6 @@ const masterNik = {
   MHKS6GK3J: "SIGRA X",
   PM2M804S1: "SIRION STD",
   MHKB3FA1J: "BLINDVAN 1.5",
-  MHKP3BA1J: "PICK UP 1.3",
   MHKT3CA1J: "PICK UP 1.5 3W",
   MHKT3BA1J: "PICK UP 1.3 3W",
   MHKP3FA1J: "PICK UP 1.5 STD",
@@ -261,6 +260,7 @@ const masterNik = {
   MHKAB1AC8: "NEW AYLA R",
   MHKAB1AC9: "NEW AYLA R",
   MHKAB1ACX: "NEW AYLA R",
+  MHKP3BA1JTK: "PICK UP 1.3",
 };
 
 const getTodayDate = () => new Date().toISOString().split("T")[0];
