@@ -101,7 +101,7 @@
         <input
           type="text"
           v-model="form.kode_accu"
-          placeholder="Contoh: 2876"
+          placeholder="Contoh: 34B19R"
           class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs"
           autocapitalize="characters"
           autocorrect="off"
