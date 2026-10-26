@@ -31,8 +31,8 @@
               />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span class="text-sm">Buka Kamera HP (Lebih Jernih)</span>
-            <span class="text-[10px] text-slate-400 font-normal">Menggunakan OCR Engine 2</span>
+            <span class="text-sm">Buka Kamera HP</span>
+            <span class="text-[10px] text-slate-400 font-normal">Menggunakan OCR Engine </span>
           </div>
 
           <div v-else class="flex items-center gap-3">
@@ -70,7 +70,7 @@
     <!-- Warna Grid -->
     <div class="space-y-1.5">
       <label class="text-xs font-bold tracking-wider text-slate-600 uppercase">Warna *</label>
-      <div class="grid grid-cols-4 gap-2">
+      <div class="grid grid-cols-3 gap-2">
         <button
           v-for="w in options.warna"
           :key="w"
@@ -101,8 +101,11 @@
         <input
           type="text"
           v-model="form.kode_accu"
-          placeholder="Kode Accu"
-          class="w-full bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs"
+          placeholder="Contoh: 2876"
+          class="w-full bg-white text-slate-900 border border-slate-300 rounded-xl px-4 py-3 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-xs"
+          autocapitalize="characters"
+          autocorrect="off"
+          autocomplete="off"
         />
       </div>
     </div>
@@ -149,7 +152,7 @@ const props = defineProps({
 const emit = defineEmits(["submit", "reset"]);
 
 const options = {
-  warna: ["BLACK", "WHITE", "SILVER", "RED", "YELLOW", "GREY", "BRONZE", "ORANGE"],
+  warna: ["BLACK", "WHITE", "SILVER", "RED", "YELLOW", "GREY", "BRONZE", "ORANGE", "GREEN"],
 };
 
 const masterNik = {
