@@ -301,7 +301,6 @@ watch(
   { immediate: true }
 );
 
-// Auto-fill Tipe hanya jika panjangnya cukup, membiarkan override manual
 watch(
   () => form.no_rangka,
   (newVal) => {
@@ -310,7 +309,7 @@ watch(
       if (cleanVal.length >= 9) {
         const prefix = cleanVal.substring(0, 9);
         if (masterNik[prefix]) {
-          form.tipe = masterNik[prefix]; // Auto-fill jika terdaftar di Master NIK
+          form.tipe = masterNik[prefix];
         }
       }
     } else if (!props.editData) {
@@ -319,101 +318,129 @@ watch(
   }
 );
 
-// FUNGSI NATIVE KAMERA IPHONE & OCR ENGINE 2
-const handleNativeCamera = (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
+// Fungsi terpisah untuk memperkecil ukuran foto (Kompresi)
+const compressImage = (file, maxWidth = 1024, quality = 0.7) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("Gagal memproses gambar canvas"));
+              return;
+            }
+            const compressedFile = new File([blob], "compressed_image.jpg", {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+// Fungsi Kamera & OCR Utama
+const handleNativeCamera = async (event) => {
+  const fileAsli = event.target.files[0];
+  if (!fileAsli) return;
 
   isProcessing.value = true;
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onload = async () => {
-      const canvas = document.createElement("canvas");
-      const MAX_WIDTH = 1200;
-      let width = img.width;
-      let height = img.height;
+  try {
+    // 1. Kompresi gambar terlebih dahulu
+    const fileKecil = await compressImage(fileAsli, 1024, 0.7);
 
-      if (width > MAX_WIDTH) {
-        height *= MAX_WIDTH / width;
-        width = MAX_WIDTH;
-      }
+    // 2. Masukkan ke FormData
+    const formData = new FormData();
+    formData.append("apikey", "K8141029873295488957");
+    formData.append("OCREngine", "2");
+    formData.append("isTable", "true");
+    formData.append("scale", "true");
+    formData.append("file", fileKecil); // Menggunakan "file" fisik, bukan base64
 
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, width, height);
+    // 3. Kirim ke OCR.space
+    const response = await fetch("https://api.ocr.space/parse/image", {
+      method: "POST",
+      body: formData,
+    });
 
-      const base64Image = canvas.toDataURL("image/jpeg", 0.8);
+    const result = await response.json();
 
-      const formData = new FormData();
-      formData.append("base64Image", base64Image);
-      formData.append("apikey", "K8141029873295488957");
-      formData.append("OCREngine", "2");
-      formData.append("isTable", "true");
-      formData.append("scale", "true");
+    // 4. Proses Hasil Pembacaan Teks
+    if (result && result.ParsedResults && result.ParsedResults.length > 0) {
+      let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
 
-      try {
-        const response = await fetch("https://api.ocr.space/parse/image", {
-          method: "POST",
-          body: formData,
-        });
-
-        const result = await response.json();
-
-        if (result && result.ParsedResults && result.ParsedResults.length > 0) {
-          let rawText = result.ParsedResults[0].ParsedText.toUpperCase();
-
-          let detectedColor = "";
-          for (let w of options.warna) {
-            if (rawText.includes(w)) {
-              detectedColor = w;
-              break;
-            }
-          }
-          if (!detectedColor) {
-            if (rawText.includes("WH1TE") || rawText.includes("WHTE")) detectedColor = "WHITE";
-            if (rawText.includes("S1LVER") || rawText.includes("SLVER")) detectedColor = "SILVER";
-            if (rawText.includes("8LACK") || rawText.includes("BLCK")) detectedColor = "BLACK";
-            if (rawText.includes("6REY") || rawText.includes("GPEY")) detectedColor = "GREY";
-          }
-
-          let cleanText = rawText.replace(/I/g, "1").replace(/L/g, "1").replace(/\|/g, "1").replace(/!/g, "1").replace(/O/g, "0").replace(/Q/g, "0").replace(/D/g, "0");
-          cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
-
-          let mhkIndex = cleanText.indexOf("MHK");
-          if (mhkIndex === -1) mhkIndex = cleanText.indexOf("PM2");
-
-          if (mhkIndex !== -1 && cleanText.length >= mhkIndex + 17) {
-            let finalVin = cleanText.substring(mhkIndex, mhkIndex + 17);
-
-            finalVin = finalVin.replace("8A1", "BA1");
-            finalVin = finalVin.replace("B41", "BA1");
-            finalVin = finalVin.replace("P38A1", "P3BA1");
-
-            form.no_rangka = finalVin;
-            if (detectedColor) form.warna = detectedColor;
-
-            try {
-              navigator.vibrate(200);
-            } catch (e) {}
-          } else {
-            alert("Gagal mendeteksi VIN 17 digit.\n\nJika label cacat, silakan ketik manual.");
-          }
-        } else {
-          alert("Gagal membaca foto. Pastikan gambar jelas dan terang.");
+      let detectedColor = "";
+      for (let w of options.warna) {
+        if (rawText.includes(w)) {
+          detectedColor = w;
+          break;
         }
-      } catch (err) {
-        alert("Gagal menghubungi server OCR. Periksa koneksi internet Anda.");
-      } finally {
-        isProcessing.value = false;
-        event.target.value = "";
       }
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+      if (!detectedColor) {
+        if (rawText.includes("WH1TE") || rawText.includes("WHTE")) detectedColor = "WHITE";
+        if (rawText.includes("S1LVER") || rawText.includes("SLVER")) detectedColor = "SILVER";
+        if (rawText.includes("8LACK") || rawText.includes("BLCK")) detectedColor = "BLACK";
+        if (rawText.includes("6REY") || rawText.includes("GPEY")) detectedColor = "GREY";
+      }
+
+      let cleanText = rawText.replace(/I/g, "1").replace(/L/g, "1").replace(/\|/g, "1").replace(/!/g, "1").replace(/O/g, "0").replace(/Q/g, "0").replace(/D/g, "0");
+      cleanText = cleanText.replace(/[^A-Z0-9]/g, "");
+
+      let mhkIndex = cleanText.indexOf("MHK");
+      if (mhkIndex === -1) mhkIndex = cleanText.indexOf("PM2");
+
+      if (mhkIndex !== -1 && cleanText.length >= mhkIndex + 17) {
+        let finalVin = cleanText.substring(mhkIndex, mhkIndex + 17);
+
+        finalVin = finalVin.replace("8A1", "BA1");
+        finalVin = finalVin.replace("B41", "BA1");
+        finalVin = finalVin.replace("P38A1", "P3BA1");
+
+        form.no_rangka = finalVin;
+        if (detectedColor) form.warna = detectedColor;
+
+        try {
+          navigator.vibrate(200);
+        } catch (e) {}
+      } else {
+        alert("Gagal mendeteksi VIN 17 digit.\n\nJika label cacat, silakan ketik manual.");
+      }
+    } else {
+      alert("Gagal membaca foto. Pastikan gambar jelas dan terang.");
+    }
+  } catch (err) {
+    alert("Gagal menghubungi server OCR. Periksa koneksi internet Anda.");
+    console.error("Error OCR:", err);
+  } finally {
+    isProcessing.value = false;
+    event.target.value = ""; // Reset input file agar bisa klik foto yang sama 2x
+  }
 };
 
 const handleSubmit = () => {
