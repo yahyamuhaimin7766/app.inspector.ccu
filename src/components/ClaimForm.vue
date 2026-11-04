@@ -349,7 +349,7 @@ const handleNativeCamera = (event) => {
 
       const formData = new FormData();
       formData.append("base64Image", base64Image);
-      formData.append("apikey", "helloworld");
+      formData.append("apikey", "K8141029873295488957");
       formData.append("OCREngine", "2");
       formData.append("isTable", "true");
       formData.append("scale", "true");
